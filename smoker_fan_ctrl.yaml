@@ -169,3 +169,14 @@ output:
 # status_led:
 #   pin: D4
 #   id: statusled
+
+# Example configuration entry
+spi:
+  miso_pin: D6
+  clk_pin: D5
+
+sensor:
+  - platform: max6675
+    name: "Probe"
+    cs_pin: D8
+    update_interval: 10s

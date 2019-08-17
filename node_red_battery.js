@@ -9,24 +9,26 @@ try {
     }
     
     
-    // Simple "database" object that stores data as a simple string
+    // Simple "database" object. Array based, persisted as json
     class db {
         constructor(name) {
             this.name = name;
-            if (name === undefined || name === null || name === "") {
-                this.data = [];
-            } else {
+            if (name !== undefined && name !== null && name !== "") {
                 var db_text = hass.homeAssistant.states["input_text." + name + "_db"].state || "";
-                if (db_text.length === 0) {
-                    this.data = [];
-                } else {
-                    this.data = db_text.split(';');
+                if (db_text.length !== 0) {
+                    try {
+                        var obj = JSON.parse(decodeURIComponent(db_text));
+                        if (obj.data) {
+                            this.data = obj.data;
+                        }
+                    } catch (e) {
+                        
+                    }
                 }
-    
-                var data_length = this.data.length;
-                for (var i = 0; i < data_length; ++i) {
-                    this.data[i] = this.data[i].split(',');
-                }
+            }
+
+            if (this.data == undefined) {
+                this.data = [];
             }
         }
         
@@ -45,12 +47,12 @@ try {
             return index != -1 ? this.data[index] : undefined;
         }
 
-        insertAtBeg(key, data1, data2) {
-            this.data.unshift([key, data1, data2]);
+        insertAtBeg(array) {
+            this.data.unshift(array);
         }
         
-        insertAtEnd(key, data1, data2) {
-            this.data[this.data.length] = [key, data1, data2];
+        insertAtEnd(array) {
+            this.data[this.data.length] = array;
         }
         
         delete(key) {
@@ -58,6 +60,10 @@ try {
             if (index != -1) {
                 this.data.splice(index, 1);
             }
+        }
+        
+        count() {
+            return this.data.length;
         }
 
         iterate(func) {
@@ -92,12 +98,11 @@ try {
 
         }
 
+        // Closes database and returns json for user to persist. While we can
+        // read the data from an ha input_text, we can't easily write it out
+        // to the same place because writing requires a different node.
         close() {
-            var data_length = this.data.length;
-            for (var i = 0; i < data_length; ++i) {
-                this.data[i] = this.data[i].join(',');
-            }
-            return this.data.join(';');
+            return JSON.stringify({ "data": this.data });
         }
 
     }
@@ -144,7 +149,7 @@ try {
                     // Already in low level list?
                     if (!batttery_alert) {
                         // No, new alert
-                        alerts.insertAtEnd(item.entity_id, level);
+                        alerts.insertAtEnd([item.entity_id, level]);
                         needToNotify = true;
                     } else {
                         // Yes, already in list, need to update and perhaps re-notify
@@ -184,7 +189,7 @@ try {
     if (needToNotify) {
         // Iterate over low battery items again. We can't combine iterations because
         // needToNotify may not be true the first time.
-        var notice = "Alert - Batteries (" + count + ") need replacement:";
+        var notice = "Alert - Batteries (" + alerts.count() + ") need replacement:";
         alerts.iterate_reverse(function (item) {
         
             var entity = hass.homeAssistant.states[item[0]];
@@ -227,11 +232,11 @@ try {
         msg = null;
     }
 
-    return [msg, { payload: alerts.close() } ];
+    return [msg, { payload: encodeURIComponent(alerts.close()) } ];
     
 } catch(error) {
     hass.homeAssistant.states["input_number.battery_alerts_failures"].state
     //msg.payload = "Error running battery level management";
-    return { payload: "Error running battery level management"};
+    return { payload: "Error running battery level management", notify_to: ""};
 }
 
