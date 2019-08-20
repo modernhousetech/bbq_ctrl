@@ -103,7 +103,7 @@ mqtt:
       then:
         - logger.log: "at ${devicename}/cmnd/temp_current"
         - lambda: |-
-            process_oven_temp(parse_float(x).value());
+            process_temp_received(parse_float(x).value(), true);
 
     - topic: ${devicename}/cmnd/reset
       then:
@@ -179,4 +179,10 @@ sensor:
   - platform: max6675
     name: "Probe"
     cs_pin: D8
-    update_interval: 10s
+    update_interval: 15s
+    filters:
+      - lambda: return x * (9.0/5.0) + 32.0;
+    unit_of_measurement: "°F"    
+    on_value:
+      lambda: |-
+        process_temp_received((float)x, false);

@@ -1,7 +1,7 @@
 #include "esphome.h"
 //#include "custom.h"
 
-#define FW_VERSION "0.02.00"
+#define FW_VERSION "0.03.01"
 // 0.02
 //  Added FW_VERSION
 
@@ -40,11 +40,24 @@ float g_fan_speed = 0.0;
 const float fan_speed_invalid = -1.0;
 float g_saved_fan_speed = fan_speed_invalid;
 
+// bool g_enable_probe = true;
+bool g_use_probe = true;
+
 float g_fan_speed_min = 0.5;
 float g_fan_speed_max = 1.0;
 const float fan_speed_off = 0.0;
+// How much we bump fan speed on every
+// too low oven temp.
 float g_fan_speed_adjust = 0.1;
+// because the internal temp updates much more frequently than
+// we divide the speed adjust by the value below
+// when on internal probe.
+float fan_speed_internal_factor = 4.0;
+inline float fanSpeedAdjust() { 
+  return g_fan_speed_adjust / (g_use_probe ? fan_speed_internal_factor : 1.0 );
+}
 bool g_door_open = false;
+
 bool g_haveRetainedProperties = false;
 
 void on_boot() {
@@ -147,6 +160,14 @@ void process_properties(const JsonObject& x, bool fromStat=false) {
     set_door_open((bool)x["door_open"]);
   }
 
+  // if (!fromStat && (x.containsKey("enable_probe") && x["enable_probe"].is<bool>()))  {
+  //   g_enable_probe = (bool)x["enable_probe"];
+  // }
+
+  if (!fromStat && (x.containsKey("use_probe") && x["use_probe"].is<bool>()))  {
+    g_use_probe = (bool)x["use_probe"];
+  }
+
   // Immediatly send retained message
   // This serves two purposes:
   //  1. If this is from set options cmnd the call gets feedback that
@@ -221,6 +242,8 @@ void send_properties() {
     root["fan_speed_adjust"] = g_fan_speed_adjust;
     root["door_open"] = g_door_open;
     // root["unit_of_measure"] = g_xlate->uom_text();
+    // root["enable_probe"] = g_enable_probe;
+    root["use_probe"] = g_use_probe;
   }, 1, true);
 
 }
@@ -270,6 +293,11 @@ void send_property(const char* prop_name) {
 //  current > target
 //    g_fan_speed = 0.0
 
+void process_temp_received(float temp, bool external) {
+  if ((!external && g_use_probe) || (external && !g_use_probe)) {
+    process_oven_temp(temp);
+  }  
+}
 
 
 void process_oven_temp(float temp_current) {
@@ -282,13 +310,13 @@ void process_oven_temp(float temp_current) {
 
     ESP_LOGD("main", "process_oven_temp: temp_cur was=%f, now=%f, temp_target=%f, fan_speed=%f", was, g_temp_current, g_temp_target, g_fan_speed); 
 
-    if (was != g_temp_current) {
+    //if (g_use_probe && was != g_temp_current) {
       send_property("temp_current");
-    }
+    //}
 
     float fan_speed = g_fan_speed;
     if (g_temp_current < g_temp_target) {
-      fan_speed = max(min(fan_speed + g_fan_speed_adjust, g_fan_speed_max), g_fan_speed_min);
+      fan_speed = max(min(fan_speed + fanSpeedAdjust(), g_fan_speed_max), g_fan_speed_min);
     } else if (g_temp_current > g_temp_target) {
       fan_speed = fan_speed_off;
     }

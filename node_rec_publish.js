@@ -30,7 +30,9 @@ if (msg.db) {
     msg.db.prune(15);
     msgDb.dbText = msg.db.close();
     msg.db = null;
-}
+    //msgDb.dbText = "%7B%22data%22%3A%5B%5B%22a%22%2C%222019-8-15%2013%3A1%3A59%22%2C%22refridge%22%2C%22Hello%20world!%22%2Ctrue%5D%5D%7D"; // msg.db.close();
+     // msgDb.dbText =                 "abcertyuiopasdfghjklzxcvbnmqwertyuiqwertyuiopasdfghjklzxcvbnmqwertyuiopasdfertyuiopasdfghjklzxcvbnmqwertyui"; // msg.db.close();
+    }
 
 if (type === "am") {
     return [msg, msg, null, msgDb];
