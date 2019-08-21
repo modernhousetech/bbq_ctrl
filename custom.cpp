@@ -60,6 +60,37 @@ bool g_door_open = false;
 
 bool g_haveRetainedProperties = false;
 
+//////////////////////////////////////////////////////////////////////////
+// Translation 
+class TranslationUnit {
+  public:
+  // Unit of measure text
+  virtual const char* uom_text() = 0; 
+  virtual bool is_match(const char* str) { return strcmp(str, uom_text()) == 0 ? true : false; };
+  virtual float native_to_uom(float native_unit) = 0;
+  virtual float uom_to_native(float uom_unit) = 0;
+  // virtual float convert_native_to_uom(float native_unit) { return native_to_uom(native_unit); }
+  // virtual float convert_uom_to_native(float uom_unit) { return (uom_unit ) * native_to_uom(); }
+};
+
+class FahrenheitTranslationUnit: public TranslationUnit {
+  public:
+  virtual const char* uom_text() { return "°F"; } 
+  virtual float native_to_uom(float native_unit) { return native_unit * (9.0 / 5.0) + 32.0; }
+  virtual float uom_to_native(float uom_unit) { return (uom_unit - 32.0) * (5.0 / 9.0); }
+} fahrenheit_xlate;
+
+class CelsiusTranslationUnit: public TranslationUnit {
+  public:
+  virtual const char* uom_text() { return "°C"; } 
+  virtual float native_to_uom(float native_unit) { return native_unit; }
+  virtual float uom_to_native(float uom_unit) { return uom_unit; }
+} celsius_xlate;
+
+// Setup initially for fahrenheit
+TranslationUnit* g_xlate = &fahrenheit_xlate;
+
+
 void on_boot() {
   // delayaction = new DelayAction<std::string>();
   // App.register_component(delayaction);
@@ -97,25 +128,26 @@ void process_properties(const JsonObject& x, bool fromStat=false) {
 //       was.c_str(), sntp_time->get_timezone().c_str()); 
 //  }
 
-  // if ( x.containsKey("unit_of_measure") && x["unit_of_measure"].is<char*>()) {
-  //   const char* was = g_xlate->uom_text();
-  //   const char* uom = x["unit_of_measure"];
-  //   TranslationUnit* xlate = nullptr;
-  //   if (liter_xlate.is_match(uom)) {
-  //     xlate = &liter_xlate;
-  //   } else if (gal_xlate.is_match(uom)) {
-  //     xlate = &gal_xlate;
-  //   }
-  //   if (xlate && xlate != g_xlate) { 
-  //     // Need to translate stored values
-  //     g_max_wf = xlate->convert_pulses_to_uom(g_xlate->convert_uom_to_pulses(g_max_wf));
-  //     g_hourlyWaterUsage.convert( [=](float &val) {
-  //        return xlate->convert_pulses_to_uom(g_xlate->convert_uom_to_pulses(val));
-  //     });
-  //     g_xlate = xlate;
-  //   }
-  //   ESP_LOGD("main", "unit_of_measure: specified %s, was %s, now %s", uom, was, g_xlate->uom_text()); 
-  // }
+  if ( x.containsKey("unit_of_measurement") && x["unit_of_measurement"].is<char*>()) {
+    const char* was = g_xlate->uom_text();
+    const char* uom = x["unit_of_measurement"];
+    TranslationUnit* xlate = nullptr;
+    if (celsius_xlate.is_match(uom)) {
+      xlate = &celsius_xlate;
+    } else if (fahrenheit_xlate.is_match(uom)) {
+      xlate = &fahrenheit_xlate;
+    }
+    if (xlate && xlate != g_xlate) { 
+      // Need to translate stored values:
+      //  g_temp_target 
+      //  g_temp_current
+        
+      g_temp_target = xlate->native_to_uom(g_xlate->uom_to_native(g_temp_target));
+      g_temp_current = xlate->native_to_uom(g_xlate->uom_to_native(g_temp_current));
+      g_xlate = xlate;
+    }
+    ESP_LOGD("main", "unit_of_measurement: specified %s, was %s, now %s", uom, was, g_xlate->uom_text()); 
+  }
 
   if (x.containsKey("temp_target") && x["temp_target"].is<float>())  {
     float was = g_temp_target;
@@ -241,7 +273,7 @@ void send_properties() {
     root["fan_speed_max"] = g_fan_speed_max;
     root["fan_speed_adjust"] = g_fan_speed_adjust;
     root["door_open"] = g_door_open;
-    // root["unit_of_measure"] = g_xlate->uom_text();
+    root["unit_of_measurement"] = g_xlate->uom_text();
     // root["enable_probe"] = g_enable_probe;
     root["use_probe"] = g_use_probe;
   }, 1, true);
@@ -278,9 +310,9 @@ void send_property(const char* prop_name) {
     if (strcmp(prop_name, "door_open") == 0) {
       root["door_open"] = g_door_open;
     }
-    // if (strcmp(prop_name, "unit_of_measure") == 0) {
-    //   root["unit_of_measure"] = g_xlate->uom_text();
-    // }
+    if (strcmp(prop_name, "unit_of_measurement") == 0) {
+      root["unit_of_measurement"] = g_xlate->uom_text();
+    }
   }, 1, false);
 
 }
@@ -361,6 +393,10 @@ void process_stat(const JsonObject& x) {
   }
   
  
+}
+
+float adjust_raw_temp(float temp) {
+  return temp * (9.0/5.0) + 32.0;
 }
 
 void reset() {

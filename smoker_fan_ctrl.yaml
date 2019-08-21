@@ -66,6 +66,18 @@ ota:
 #                 ESP_LOGD("main", "time.is_valid()");
 #               }
 
+# A housekeeping software sensor
+binary_sensor:
+  - platform: status
+    name: "status"
+    retain: false
+
+switch:
+  - platform: restart
+    name: "restart"
+    retain: false
+
+
 mqtt:
   # Give the mqtt component an ID
   id: mqtt_client  
@@ -176,12 +188,22 @@ spi:
   clk_pin: D5
 
 sensor:
+  # two housekeeping software sensors
+  - platform: wifi_signal
+    name: "wifi_signal"
+    update_interval: 60s
+
+  - platform: uptime
+    name: uptime
+
+    # The temperature sensor
   - platform: max6675
     name: "Probe"
     cs_pin: D8
     update_interval: 15s
     filters:
-      - lambda: return x * (9.0/5.0) + 32.0;
+      - lambda: return adjust_raw_temp((float)x);
+      # - lambda: return x * (9.0/5.0) + 32.0;
     unit_of_measurement: "°F"    
     on_value:
       lambda: |-
