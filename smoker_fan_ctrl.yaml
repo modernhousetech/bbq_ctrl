@@ -43,28 +43,31 @@ logger:
 ota:
   password: !secret ota_password
 
-# api:
+#api:
 
-# time:
-#   # - platform: sntp
-#   #   id: sntp_time
-#   #   timezone: "EST+5"
-#   - platform: homeassistant
-#     id: sntp_time
-#     # timezone: "EST+5"
-#     on_time:
-#       # Every minute
-#       - seconds: 0
-#         minutes: /1
-#         then:
-#           - logger.log: "on_time minute"
-#           - lambda: |-
-#               auto time = sntp_time->now();
-#               if ( !time.is_valid()) {
-#                 ESP_LOGD("main", "NOT time.is_valid()");
-#               } else {
-#                 ESP_LOGD("main", "time.is_valid()");
-#               }
+time:
+  # - platform: sntp
+  #   id: sntp_time
+  #   timezone: "EST+5"
+  - platform: sntp
+    id: sntp_time
+    servers:
+      # - time.google.com
+      - 1.us.pool.ntp.org 
+    # timezone: "EST+5"
+    on_time:
+      # Every minute
+      - seconds: 0
+        minutes: /1
+        then:
+          - logger.log: "on_time minute"
+          - lambda: |-
+              auto time = sntp_time->now();
+              if ( !time.is_valid()) {
+                ESP_LOGD("main", "NOT time.is_valid()");
+              } else {
+                ESP_LOGD("main", "time.is_valid()");
+              }
 
 # A housekeeping software sensor
 binary_sensor:
@@ -87,6 +90,15 @@ mqtt:
 
   on_message:
     # Deprecated
+    - topic: ${devicename}/cmnd/test
+      then:
+        - lambda: |-
+            auto time = sntp_time->now();
+            if ( !time.is_valid()) {
+              ESP_LOGD("main", "NOT time.is_valid()");
+            } else {
+              ESP_LOGD("main", "time.is_valid()");
+            }
     - topic: ${devicename}/cmnd/set_fan_speed
       then:
         # - lambda: |-
