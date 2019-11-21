@@ -1,15 +1,15 @@
 #include "esphome.h"
 //#include "custom.h"
 
-#define FW_VERSION "0.03.01"
+#define FW_VERSION "0.03.10"
 // 0.02
 //  Added FW_VERSION
 
 // 0.01
 // First workable version in action 
 
-// Must also define in smoker_fan_ctrl.yaml
-#define DEVICENAME "smoker_fan_ctrl"
+// Must also define in bbq_ctl.yaml
+#define DEVICENAME "bbq_ctl"
 
 using namespace esphome;
 //using namespace time;
@@ -25,13 +25,13 @@ extern gpio::GPIOBinaryOutput *counter_clockwise_pin;
 extern esp8266_pwm::ESP8266PWM *pwr_led;
 
 
-float g_temp_target = 0.0;
-float g_temp_current = 0.0;
+float g_oven_temp_target = 0.0;
+float g_oven_temp_current = 0.0;
 
-// How many temp_current calls have we received. We really only
-// care about 0 and >0. If > 0 then on a set temp_target we will
+// How many oven_temp_current calls have we received. We really only
+// care about 0 and >0. If > 0 then on a set oven_temp_target we will
 // immediatly set fan speed accordingly.
-int g_temp_current_count = 0;
+int g_oven_temp_current_count = 0;
 
 float g_fan_speed = 0.0;
 
@@ -101,7 +101,7 @@ void on_boot() {
 // Local forward declarations
 void send_properties();
 void send_property(const char* prop_name);
-void process_oven_temp(float temp_current);
+void process_oven_temp(float oven_temp_current);
 void set_fan_speed(float fan_speed);
 void set_door_open(bool door_open);
 void set_fan_speed_min(float fan_speed_min);
@@ -109,8 +109,8 @@ void set_fan_speed_max(float fan_speed_max);
 
 
 //    {
-//      "temp_target": 225.0,
-//      "temp_current": 204.0,
+//      "oven_temp_target": 225.0,
+//      "oven_temp_current": 204.0,
 //      "fan_speed": 0.7,
 //      "fan_speed_base": 0.5,
 //      "fan_speed_adjust": 0.1,
@@ -139,35 +139,35 @@ void process_properties(const JsonObject& x, bool fromStat=false) {
     }
     if (xlate && xlate != g_xlate) { 
       // Need to translate stored values:
-      //  g_temp_target 
-      //  g_temp_current
+      //  g_oven_temp_target 
+      //  g_oven_temp_current
         
-      g_temp_target = xlate->native_to_uom(g_xlate->uom_to_native(g_temp_target));
-      g_temp_current = xlate->native_to_uom(g_xlate->uom_to_native(g_temp_current));
+      g_oven_temp_target = xlate->native_to_uom(g_xlate->uom_to_native(g_oven_temp_target));
+      g_oven_temp_current = xlate->native_to_uom(g_xlate->uom_to_native(g_oven_temp_current));
       g_xlate = xlate;
     }
     ESP_LOGD("main", "unit_of_measurement: specified %s, was %s, now %s", uom, was, g_xlate->uom_text()); 
   }
 
-  if (x.containsKey("temp_target") && x["temp_target"].is<float>())  {
-    float was = g_temp_target;
-    g_temp_target = (float)x["temp_target"];
-    ESP_LOGD("main", "target temp: was %f, now %f", was, g_temp_target); 
+  if (x.containsKey("oven_temp_target") && x["oven_temp_target"].is<float>())  {
+    float was = g_oven_temp_target;
+    g_oven_temp_target = (float)x["oven_temp_target"];
+    ESP_LOGD("main", "target oven temp: was %f, now %f", was, g_oven_temp_target); 
 
-    // Are we getting temp_current calls?
-    if (g_temp_current_count > 0) {
+    // Are we getting oven_temp_current calls?
+    if (g_oven_temp_current_count > 0) {
       // Yes, then we are actively adjusting fan speed, so we
-      // process new target with the same temp_current.
-      process_oven_temp(g_temp_current);
+      // process new target with the same oven_temp_current.
+      process_oven_temp(g_oven_temp_current);
     }
   }
 
-  // temp_current is in the retained "stat" messsage but ignored here from "stat" 
-  if (!fromStat && (x.containsKey("temp_current") && x["temp_current"].is<float>()))  {
-    float was = g_temp_current;
-    process_oven_temp((float)x["temp_current"]);
-    //g_temp_current = (float)x["temp_current"];
-    ESP_LOGD("main", "current temp: was %f, now %f", was, g_temp_current); 
+  // oven_temp_current is in the retained "stat" messsage but ignored here from "stat" 
+  if (!fromStat && (x.containsKey("oven_temp_current") && x["oven_temp_current"].is<float>()))  {
+    float was = g_oven_temp_current;
+    process_oven_temp((float)x["oven_temp_current"]);
+    //g_oven_temp_current = (float)x["oven_temp_current"];
+    ESP_LOGD("main", "current oven temp: was %f, now %f", was, g_oven_temp_current); 
   }
 
   if (!fromStat && (x.containsKey("fan_speed") && x["fan_speed"].is<float>()))  {
@@ -266,8 +266,8 @@ void send_properties() {
   mqtt_client->publish_json(DEVICENAME "/stat", [=](JsonObject &root) {
     // root["timezone"] = sntp_time->get_timezone();
     root["fw_version"] = FW_VERSION;
-    root["temp_target"] = g_temp_target;
-    root["temp_current"] = g_temp_current;
+    root["oven_temp_target"] = g_oven_temp_target;
+    root["oven_temp_current"] = g_oven_temp_current;
     root["fan_speed"] = g_fan_speed;
     root["fan_speed_min"] = g_fan_speed_min;
     root["fan_speed_max"] = g_fan_speed_max;
@@ -289,11 +289,11 @@ void send_property(const char* prop_name) {
     // if (strcmp(prop_name, "timezone") == 0) {
     //   root["timezone"] = sntp_time->get_timezone();
     // }
-    if (strcmp(prop_name, "temp_target") == 0) {
-      root["temp_target"] = g_temp_target;
+    if (strcmp(prop_name, "oven_temp_target") == 0) {
+      root["oven_temp_target"] = g_oven_temp_target;
     }
-    if (strcmp(prop_name, "temp_current") == 0) {
-      root["temp_current"] = g_temp_current;
+    if (strcmp(prop_name, "oven_temp_current") == 0) {
+      root["oven_temp_current"] = g_oven_temp_current;
     }
     if (strcmp(prop_name, "fan_speed") == 0) {
       root["fan_speed"] = g_fan_speed;
@@ -332,24 +332,24 @@ void process_temp_received(float temp, bool external) {
 }
 
 
-void process_oven_temp(float temp_current) {
+void process_oven_temp(float oven_temp_current) {
 
   if (!g_door_open) {
-    ++g_temp_current_count;
+    ++g_oven_temp_current_count;
 
-    float was = g_temp_current;
-    g_temp_current = temp_current;
+    float was = g_oven_temp_current;
+    g_oven_temp_current = oven_temp_current;
 
-    ESP_LOGD("main", "process_oven_temp: temp_cur was=%f, now=%f, temp_target=%f, fan_speed=%f", was, g_temp_current, g_temp_target, g_fan_speed); 
+    ESP_LOGD("main", "process_oven_temp: temp_cur was=%f, now=%f, oven_temp_target=%f, fan_speed=%f", was, g_oven_temp_current, g_oven_temp_target, g_fan_speed); 
 
-    //if (g_use_probe && was != g_temp_current) {
-      send_property("temp_current");
+    //if (g_use_probe && was != g_oven_temp_current) {
+      send_property("oven_temp_current");
     //}
 
     float fan_speed = g_fan_speed;
-    if (g_temp_current < g_temp_target) {
+    if (g_oven_temp_current < g_oven_temp_target) {
       fan_speed = max(min(fan_speed + fanSpeedAdjust(), g_fan_speed_max), g_fan_speed_min);
-    } else if (g_temp_current > g_temp_target) {
+    } else if (g_oven_temp_current > g_oven_temp_target) {
       fan_speed = fan_speed_off;
     }
 
@@ -359,7 +359,7 @@ void process_oven_temp(float temp_current) {
       ESP_LOGD("main", "fan speed unchanged"); 
     }
   } else {
-      ESP_LOGD("main", "process_oven_temp(%f) ignored because \"door open\"", temp_current); 
+      ESP_LOGD("main", "process_oven_temp(%f) ignored because \"door open\"", oven_temp_current); 
   }
 }
 
@@ -401,6 +401,6 @@ float adjust_raw_temp(float temp) {
 
 void reset() {
   set_fan_speed(0.0);
-  g_temp_current_count = 0;
+  g_oven_temp_current_count = 0;
   g_saved_fan_speed = fan_speed_invalid;
 }

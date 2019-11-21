@@ -1,6 +1,6 @@
 substitutions:
   # Must also define in custom.cpp
-  devicename: smoker_fan_ctrl
+  devicename: bbq_ctl
 
 esphome:
   name: $devicename
@@ -210,7 +210,7 @@ sensor:
 
     # The temperature sensor
   - platform: max6675
-    name: "Probe"
+    name: "probe_1"
     cs_pin: D8
     update_interval: 15s
     filters:
