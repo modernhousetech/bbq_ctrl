@@ -11,7 +11,8 @@
 **/src/esphome
 **/src/esphome.h
 **/platformio.ini
-/secrets.yaml
+**/partitions.csv
+**/secrets.yaml
 
 # Prerequisites
 *.d

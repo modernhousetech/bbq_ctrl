@@ -1,0 +1,21 @@
+  # #pinClimate: GPIO13
+  # pinStatusLed: GPIO23
+  # pinPulseCounter: GPIO36
+  # pinDallasSensor: GPIO18
+  # # pin_i2cSda: GPIO4  
+  # # pin_i2cScl: GPIO5
+  # pinValveOpen: GPIO32
+  # pinValveClose: GPIO22
+  # pinValveToggle: GPIO21
+
+  pinMotorClockwise: GPIO5
+  pinMotorCounterClockwise: GPIO0
+  pinMotorSpped: GPIO4
+
+  pinSpiMiso: GPIO12
+  pinSpiClk: GPIO14
+
+  pinI2cSda: GPIO21
+  pinI2cScl: GPIO22
+
+  pinProbe1: GPIO15

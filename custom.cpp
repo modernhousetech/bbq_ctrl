@@ -1,15 +1,18 @@
 #include "esphome.h"
 //#include "custom.h"
 
-#define FW_VERSION "0.03.10"
+#define FW_VERSION "0.05.00"
 // 0.02
 //  Added FW_VERSION
 
 // 0.01
 // First workable version in action 
 
-// Must also define in bbq_ctl.yaml
-#define DEVICENAME "bbq_ctl"
+// The "app" is a nme. It is either "bbqmini" or "bbqmax". It is passed to us in on_boot()
+std::string g_app;
+
+//#define ESP32
+
 
 using namespace esphome;
 //using namespace time;
@@ -19,10 +22,15 @@ using namespace json;
 //extern homeassistant::HomeassistantTime *sntp_time;
 using namespace output;
 extern gpio::GPIOBinaryOutput *clockwise_pin;
+#ifdef ESP32
+extern ledc::LEDCOutput *speed_pin;
+#else
 extern esp8266_pwm::ESP8266PWM *speed_pin;
+#endif
 extern gpio::GPIOBinaryOutput *counter_clockwise_pin;
 // DelayAction<std::string> *delayaction;
-extern esp8266_pwm::ESP8266PWM *pwr_led;
+//extern esp8266_pwm::ESP8266PWM *pwr_led;
+extern lcd_pcf8574::PCF8574LCDDisplay *lcd;
 
 
 float g_oven_temp_target = 0.0;
@@ -90,12 +98,40 @@ class CelsiusTranslationUnit: public TranslationUnit {
 // Setup initially for fahrenheit
 TranslationUnit* g_xlate = &fahrenheit_xlate;
 
+// We prefix out mqtt messages with this prefix. The value originates in the 
+// yaml layer and is passed to us in on_boot. 
+std::string g_mqtt_topic_prefix; 
 
-void on_boot() {
+// MQTT topics
+std::string mqttTopicStat = "/stat";
+std::string mqttTopicProp = "/prop";
+//std::string mqttSensorWfOverlimitStatus = "/sensor/wf/over_limit/status";
+
+void makeMqttTopics(const std::string& prefix) {
+
+  g_mqtt_topic_prefix = prefix;
+
+  mqttTopicStat = prefix + mqttTopicStat;
+  mqttTopicProp = prefix + mqttTopicProp;
+  //mqttSensorWfOverlimitStatus = prefix + mqttSensorWfOverlimitStatus;
+
+}
+
+
+void on_boot(const char* app) {
   // delayaction = new DelayAction<std::string>();
   // App.register_component(delayaction);
   // delayaction->set_delay(100);
   //status_led->turn
+  //SetStatusLED(1.0, 1.0, 1.0);
+  ESP_LOGD("main", "on_boot {"); 
+
+  g_app = app;
+
+  makeMqttTopics(mqtt_client->get_topic_prefix());
+
+  //g_initialized = true;
+  ESP_LOGD("main", "} on_boot"); 
 }
 
 // Local forward declarations
@@ -263,7 +299,7 @@ void send_properties() {
   ESP_LOGD("main", "sending stat"); 
 
   // Send retained message
-  mqtt_client->publish_json(DEVICENAME "/stat", [=](JsonObject &root) {
+  mqtt_client->publish_json(mqttTopicStat, [=](JsonObject &root) {
     // root["timezone"] = sntp_time->get_timezone();
     root["fw_version"] = FW_VERSION;
     root["oven_temp_target"] = g_oven_temp_target;
@@ -285,7 +321,7 @@ void send_property(const char* prop_name) {
   ESP_LOGD("main", "sending prop"); 
 
   // Send non-retained message
-  mqtt_client->publish_json(DEVICENAME "/prop", [=](JsonObject &root) {
+  mqtt_client->publish_json(mqttTopicProp, [=](JsonObject &root) {
     // if (strcmp(prop_name, "timezone") == 0) {
     //   root["timezone"] = sntp_time->get_timezone();
     // }
@@ -325,8 +361,8 @@ void send_property(const char* prop_name) {
 //  current > target
 //    g_fan_speed = 0.0
 
-void process_temp_received(float temp, bool external) {
-  if ((!external && g_use_probe) || (external && !g_use_probe)) {
+void process_temp_received(int probeId, float temp, bool external) {
+  if ((!external && g_use_probe && probeId == 0) || (external && !g_use_probe)) {
     process_oven_temp(temp);
   }  
 }
@@ -345,7 +381,6 @@ void process_oven_temp(float oven_temp_current) {
     //if (g_use_probe && was != g_oven_temp_current) {
       send_property("oven_temp_current");
     //}
-
     float fan_speed = g_fan_speed;
     if (g_oven_temp_current < g_oven_temp_target) {
       fan_speed = max(min(fan_speed + fanSpeedAdjust(), g_fan_speed_max), g_fan_speed_min);
@@ -358,9 +393,34 @@ void process_oven_temp(float oven_temp_current) {
     } else {
       ESP_LOGD("main", "fan speed unchanged"); 
     }
+
+    //lcd->printf(10, 0, "%.1f", g_oven_temp_current);
+    //lcd->print("12.2");
+    lcd->set_writer([=](lcd_pcf8574::PCF8574LCDDisplay & it) -> void {
+      // 11
+      // P1: 000 (0)
+      const char fmtCurTemp[] =     "P1:%4.0f"; 
+      const char fmtTargetrTemp[] = "T:%4.0f)"; 
+      const char fmtFan[] =         "F:%1.1f"; 
+
+      char fmtFan[] = "    F:%1.1f";
+      char* ptrfmtFan = fmtFan;
+      int baseLen = 11;
+      int extraLen = 0;
+      if (g_oven_temp_target >= 10) { ++ptrfmtFan; }
+      if (g_oven_temp_target >= 100) { ++ptrfmtFan; }
+      if (g_oven_temp_target >= 1000) { ++ptrfmtFan; }
+      strcpy(fmt + 15, ptrfmtFan);
+        it.printf(0, 0, fmt, g_oven_temp_current, g_oven_temp_target, g_fan_speed);
+    });
+
+
+
   } else {
       ESP_LOGD("main", "process_oven_temp(%f) ignored because \"door open\"", oven_temp_current); 
   }
+
+
 }
 
 void set_fan_speed(float fan_speed) {
@@ -385,7 +445,7 @@ void process_stat(const JsonObject& x) {
   } else {
     job = "processed";
   }
-  ESP_LOGD("main", DEVICENAME "/stat received -- %s", job);
+  ESP_LOGD("main", "/stat received -- %s", job);
 
   if (!g_haveRetainedProperties) {
     g_haveRetainedProperties = true;

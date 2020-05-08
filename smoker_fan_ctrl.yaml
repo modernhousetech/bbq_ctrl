@@ -1,6 +1,7 @@
 substitutions:
   # Must also define in custom.cpp
   devicename: bbq_ctl
+  app: bbqapp
 
 esphome:
   name: $devicename

@@ -1,0 +1,190 @@
+
+esphome:
+  name: ${app}_${location}
+  platform: ${platform}
+  board: ${board}
+  includes: 
+    - "custom.h"
+    - "custom.cpp"
+
+  on_boot:
+    then:
+      - output.turn_off: counter_clockwise_pin
+      - output.turn_on: clockwise_pin
+      - output.set_level:
+          id: speed_pin
+          level: 0.0
+      # - output.set_level:
+      #     id: pwr_led
+      #     level: 1.0
+      # - output.turn_on: pwr_led
+      - lambda: |-
+          on_boot("${app}");
+
+# Enable logging
+logger:
+  level: debug
+
+ota:
+  password: !secret ota_password
+
+#api:
+
+
+# Not using time at this time
+# time:
+#   # - platform: sntp
+#   #   id: sntp_time
+#   #   timezone: "EST+5"
+#   - platform: sntp
+#     id: sntp_time
+#     servers:
+#       # - time.google.com
+#       - 1.us.pool.ntp.org 
+#     # timezone: "EST+5"
+#     on_time:
+#       # Every minute
+#       - seconds: 0
+#         minutes: /1
+#         then:
+#           - logger.log: "on_time minute"
+#           - lambda: |-
+#               auto time = sntp_time->now();
+#               if ( !time.is_valid()) {
+#                 ESP_LOGD("main", "NOT time.is_valid()");
+#               } else {
+#                 ESP_LOGD("main", "time.is_valid()");
+#               }
+
+# A housekeeping software sensor
+binary_sensor:
+  - platform: status
+    name: "status"
+    retain: false
+
+switch:
+  - platform: restart
+    name: "restart"
+    retain: false
+
+
+mqtt:
+  # Give the mqtt component an ID
+  id: mqtt_client  
+  broker: !secret mqtt_local_broker
+  username: !secret mqtt_username
+  password: !secret mqtt_password
+  topic_prefix: ${app}/${location}
+
+  on_message:
+    # # Deprecated
+    # - topic: ${app}/${location}/cmnd/test
+    #   then:
+    #     - lambda: |-
+    #         auto time = sntp_time->now();
+    #         if ( !time.is_valid()) {
+    #           ESP_LOGD("main", "NOT time.is_valid()");
+    #         } else {
+    #           ESP_LOGD("main", "time.is_valid()");
+    #         }
+    - topic: ${app}/${location}/cmnd/set_fan_speed
+      then:
+        - logger.log:
+            format: "${app}/${location}/cmnd/set_fan_speed(%s) {"
+            args: [x.c_str()]
+        # - delay: 1s
+        - output.turn_on: clockwise_pin
+        - lambda: |-
+            set_fan_speed(parse_float(x).value());
+        - logger.log: "} ${app}/${location}/cmnd/set_fan_speed"
+
+    - topic: ${app}/${location}/cmnd/temp_current
+      then:
+        - logger.log: "at ${app}/${location}/cmnd/temp_current"
+        - lambda: |-
+            process_temp_received(0, parse_float(x).value(), true);
+
+    - topic: ${app}/${location}/cmnd/reset
+      then:
+        - logger.log: "at ${app}/${location}/cmnd/reset"
+        - lambda: |-
+            reset();
+
+    - topic: ${app}/${location}/cmnd/send_stat
+      then:
+        - logger.log: "at ${app}/${location}/cmnd/send_stat"
+        - lambda: |-
+            send_properties();
+
+  on_json_message:
+    - topic: ${app}/${location}/cmnd/properties
+      then:
+        lambda: |-
+          ESP_LOGD("main", "${app}/${location}/cmnd/properties");
+
+          process_properties(x);
+
+    - topic: ${app}/${location}/stat
+      then:
+        lambda: |-
+          process_stat(x);
+
+
+
+output:
+- platform: gpio
+  pin: ${pinMotorClockwise}  # GPIO5  # D1
+  id: clockwise_pin
+
+- platform: gpio
+  pin: ${pinMotorCounterClockwise} # GPIO0  # D3
+  id: counter_clockwise_pin
+
+- platform: ${motorPlatform} # esp8266_pwm  # or ledc if on ESP32
+  pin: ${pinMotorSpped} # GPIO4  # D2
+  id: speed_pin
+  frequency: 2khz
+
+  # Power on led
+# - platform: esp8266_pwm
+#   id: pwr_led
+#   pin: D4
+
+# light: 
+# - platform: monochromatic
+#   name: "Power led"
+#   output: pwr_led
+
+# # In some call:
+# # Set to forward dir
+# - output.turn_on: direction_pin
+# # Turn on motor
+# - output.set_level:
+#     id: speed_pin
+#     level: 100%
+# # Let motor drive for a big
+# - delay: 1s
+# # Turn off motor
+# - output.turn_off: speed_pin
+# # Repeat for Oóther direction, this time with turning off the direction pin
+
+# status_led:
+#   pin: D4
+#   id: statusled
+
+# Example configuration entry
+spi:
+  miso_pin: ${pinSpiMiso} # GPIO12  # D6
+  clk_pin: ${pinSpiClk} # GPIO14   # D5
+
+i2c:
+  sda: ${pinI2cSda}
+  scl: ${pinI2cScl}
+
+display:
+  - platform: lcd_pcf8574
+    id: lcd
+    dimensions: 20x${lcd_rows}
+    address: 0x27
+    lambda: |-
+      it.print("P1:");
