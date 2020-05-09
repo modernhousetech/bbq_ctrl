@@ -1,5 +1,5 @@
 sensor:
-    # The temperature sensor
+    # Temperature sensor 1
   - platform: max6675
     name: "probe_1"
     cs_pin: ${pinProbe1}  # GPIO15  # D8
@@ -11,6 +11,18 @@ sensor:
     on_value:
       lambda: |-
         process_temp_received(0, (float)x, false);
+
+    # Temperature sensor 2
+  - platform: max6675
+    name: "probe_2"
+    cs_pin: ${pinProbe2}  
+    update_interval: 15s
+    filters:
+      - lambda: return adjust_raw_temp((float)x);
+    unit_of_measurement: "°F"    
+    on_value:
+      lambda: |-
+        process_temp_received(1, (float)x, false);
 
   # two housekeeping software sensors
   - platform: wifi_signal
