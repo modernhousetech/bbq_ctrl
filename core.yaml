@@ -19,7 +19,7 @@ esphome:
       #     level: 1.0
       # - output.turn_on: pwr_led
       - lambda: |-
-          on_boot("${app}");
+          dapp.on_boot("${app}");
 
 # Enable logging
 logger:
@@ -95,26 +95,26 @@ mqtt:
         # - delay: 1s
         - output.turn_on: clockwise_pin
         - lambda: |-
-            set_fan_speed(parse_float(x).value());
+            dapp.set_fan_speed(parse_float(x).value());
         - logger.log: "} ${app}/${location}/cmnd/set_fan_speed"
 
     - topic: ${app}/${location}/cmnd/temp_current
       then:
         - logger.log: "at ${app}/${location}/cmnd/temp_current"
         - lambda: |-
-            process_temp_received(0, parse_float(x).value(), true);
+            dapp.process_temp_received(0, parse_float(x).value(), true);
 
     - topic: ${app}/${location}/cmnd/reset
       then:
         - logger.log: "at ${app}/${location}/cmnd/reset"
         - lambda: |-
-            reset();
+            dapp.reset();
 
     - topic: ${app}/${location}/cmnd/send_stat
       then:
         - logger.log: "at ${app}/${location}/cmnd/send_stat"
         - lambda: |-
-            send_properties();
+            dapp.send_properties();
 
   on_json_message:
     - topic: ${app}/${location}/cmnd/properties
@@ -122,12 +122,12 @@ mqtt:
         lambda: |-
           ESP_LOGD("main", "${app}/${location}/cmnd/properties");
 
-          process_properties(x);
+          dapp.process_properties(x);
 
     - topic: ${app}/${location}/stat
       then:
         lambda: |-
-          process_stat(x);
+          dapp.process_stat(x);
 
 
 

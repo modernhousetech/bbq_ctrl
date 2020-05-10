@@ -1,7 +1,7 @@
 #include "esphome.h"
-//#include "custom.h"
+#include "dapp.h"
 
-#define FW_VERSION "0.05.00"
+#define FW_VERSION "0.06.00"
 // 0.02
 //  Added FW_VERSION
 
@@ -32,98 +32,22 @@ extern gpio::GPIOBinaryOutput *counter_clockwise_pin;
 //extern esp8266_pwm::ESP8266PWM *pwr_led;
 extern lcd_pcf8574::PCF8574LCDDisplay *lcd;
 
+dApp dapp;
 
-float g_oven_temp_target = 0.0;
-float g_oven_temp_current = 0.0;
 
-float g_probe_temps[4];
-float g_probe_targets[4];
-float g_fan_speeds[4];
+void dApp::makeMqttTopics(const std::string& prefix) {
 
-// How many oven_temp_current calls have we received. We really only
-// care about 0 and >0. If > 0 then on a set oven_temp_target we will
-// immediatly set fan speed accordingly.
-int g_oven_temp_current_count = 0;
+  mqtt_topic_prefix_ = prefix;
 
-float g_fan_speed = 0.0;
-
-// Fan speed before door open
-// -1 for no saved fan speed
-const float fan_speed_invalid = -1.0;
-float g_saved_fan_speed = fan_speed_invalid;
-
-// bool g_enable_probe = true;
-bool g_use_probe = true;
-
-float g_fan_speed_min = 0.5;
-float g_fan_speed_max = 1.0;
-const float fan_speed_off = 0.0;
-// How much we bump fan speed on every
-// too low oven temp.
-float g_fan_speed_adjust = 0.1;
-// because the internal temp updates much more frequently than
-// we divide the speed adjust by the value below
-// when on internal probe.
-float fan_speed_internal_factor = 4.0;
-inline float fanSpeedAdjust() { 
-  return g_fan_speed_adjust / (g_use_probe ? fan_speed_internal_factor : 1.0 );
-}
-bool g_door_open = false;
-
-bool g_haveRetainedProperties = false;
-
-//////////////////////////////////////////////////////////////////////////
-// Translation 
-class TranslationUnit {
-  public:
-  // Unit of measure text
-  virtual const char* uom_text() = 0; 
-  virtual bool is_match(const char* str) { return strcmp(str, uom_text()) == 0 ? true : false; };
-  virtual float native_to_uom(float native_unit) = 0;
-  virtual float uom_to_native(float uom_unit) = 0;
-  // virtual float convert_native_to_uom(float native_unit) { return native_to_uom(native_unit); }
-  // virtual float convert_uom_to_native(float uom_unit) { return (uom_unit ) * native_to_uom(); }
-};
-
-class FahrenheitTranslationUnit: public TranslationUnit {
-  public:
-  virtual const char* uom_text() { return "°F"; } 
-  virtual float native_to_uom(float native_unit) { return native_unit * (9.0 / 5.0) + 32.0; }
-  virtual float uom_to_native(float uom_unit) { return (uom_unit - 32.0) * (5.0 / 9.0); }
-} fahrenheit_xlate;
-
-class CelsiusTranslationUnit: public TranslationUnit {
-  public:
-  virtual const char* uom_text() { return "°C"; } 
-  virtual float native_to_uom(float native_unit) { return native_unit; }
-  virtual float uom_to_native(float uom_unit) { return uom_unit; }
-} celsius_xlate;
-
-// Setup initially for fahrenheit
-TranslationUnit* g_xlate = &fahrenheit_xlate;
-
-// We prefix out mqtt messages with this prefix. The value originates in the 
-// yaml layer and is passed to us in on_boot. 
-std::string g_mqtt_topic_prefix; 
-
-// MQTT topics
-std::string mqttTopicStat = "/stat";
-std::string mqttTopicProp = "/prop";
-//std::string mqttSensorWfOverlimitStatus = "/sensor/wf/over_limit/status";
-
-void makeMqttTopics(const std::string& prefix) {
-
-  g_mqtt_topic_prefix = prefix;
-
-  mqttTopicStat = prefix + mqttTopicStat;
-  mqttTopicProp = prefix + mqttTopicProp;
+  mqttTopicStat_ = prefix + mqttTopicStat_;
+  mqttTopicProp_ = prefix + mqttTopicProp_;
   //mqttSensorWfOverlimitStatus = prefix + mqttSensorWfOverlimitStatus;
 
 }
 
-#define _countof(arr) sizeof(arr) / sizeof(arr[0])
+// #define _countof(arr) sizeof(arr) / sizeof(arr[0])
 
-void on_boot(const char* app) {
+void dApp::on_boot(const char* app) {
   // delayaction = new DelayAction<std::string>();
   // App.register_component(delayaction);
   // delayaction->set_delay(100);
@@ -133,10 +57,10 @@ void on_boot(const char* app) {
 
   g_app = app;
 
-  for (int i = 0; i < _countof(g_probe_temps); ++i) {
-      g_probe_temps[i] = 0.0;
-      g_probe_targets[i] = 0.0;
-      g_fan_speeds[i] = -1;
+  for (int i = 0; i < _countof(probe_temps_); ++i) {
+      probe_temps_[i] = 0.0;
+      probe_targets_[i] = 0.0;
+      fan_speeds_[i] = -1;
   }
 
   makeMqttTopics(mqtt_client->get_topic_prefix());
@@ -163,7 +87,7 @@ void set_fan_speed_max(float fan_speed_max);
 //      "fan_speed_adjust": 0.1,
 //      "door_open": false
 //    }
-void process_properties(const JsonObject& x, bool fromStat=false) {
+void dApp::process_properties(const JsonObject& x, bool fromStat) {
 
   ESP_LOGD("main", "\n\nBegin: process_properties(arg count=%i)", x.size()); 
 
@@ -176,45 +100,45 @@ void process_properties(const JsonObject& x, bool fromStat=false) {
 //  }
 
   if ( x.containsKey("unit_of_measurement") && x["unit_of_measurement"].is<char*>()) {
-    const char* was = g_xlate->uom_text();
+    const char* was = xlate_->uom_text();
     const char* uom = x["unit_of_measurement"];
     TranslationUnit* xlate = nullptr;
-    if (celsius_xlate.is_match(uom)) {
-      xlate = &celsius_xlate;
-    } else if (fahrenheit_xlate.is_match(uom)) {
-      xlate = &fahrenheit_xlate;
+    if (celsius_xlate_.is_match(uom)) {
+      xlate = &celsius_xlate_;
+    } else if (fahrenheit_xlate_.is_match(uom)) {
+      xlate = &fahrenheit_xlate_;
     }
-    if (xlate && xlate != g_xlate) { 
+    if (xlate && xlate != xlate_) { 
       // Need to translate stored values:
-      //  g_oven_temp_target 
-      //  g_oven_temp_current
+      //  oven_temp_target_ 
+      // oven_temp_current_
         
-      g_oven_temp_target = xlate->native_to_uom(g_xlate->uom_to_native(g_oven_temp_target));
-      g_oven_temp_current = xlate->native_to_uom(g_xlate->uom_to_native(g_oven_temp_current));
-      g_xlate = xlate;
+      oven_temp_target_ = xlate->native_to_uom(xlate_->uom_to_native(oven_temp_target_));
+      oven_temp_current_ = xlate->native_to_uom(xlate_->uom_to_native(oven_temp_current_));
+      xlate_ = xlate;
     }
-    ESP_LOGD("main", "unit_of_measurement: specified %s, was %s, now %s", uom, was, g_xlate->uom_text()); 
+    ESP_LOGD("main", "unit_of_measurement: specified %s, was %s, now %s", uom, was, xlate_->uom_text()); 
   }
 
   if (x.containsKey("oven_temp_target") && x["oven_temp_target"].is<float>())  {
-    float was = g_oven_temp_target;
-    g_oven_temp_target = (float)x["oven_temp_target"];
-    ESP_LOGD("main", "target oven temp: was %f, now %f", was, g_oven_temp_target); 
+    float was = oven_temp_target_;
+    oven_temp_target_ = (float)x["oven_temp_target"];
+    ESP_LOGD("main", "target oven temp: was %f, now %f", was, oven_temp_target_); 
 
     // Are we getting oven_temp_current calls?
-    if (g_oven_temp_current_count > 0) {
+    if (oven_temp_current_count_ > 0) {
       // Yes, then we are actively adjusting fan speed, so we
       // process new target with the same oven_temp_current.
-      process_oven_temp(g_oven_temp_current);
+      process_oven_temp(oven_temp_current_);
     }
   }
 
   // oven_temp_current is in the retained "stat" messsage but ignored here from "stat" 
   if (!fromStat && (x.containsKey("oven_temp_current") && x["oven_temp_current"].is<float>()))  {
-    float was = g_oven_temp_current;
+    float was = oven_temp_current_;
     process_oven_temp((float)x["oven_temp_current"]);
-    //g_oven_temp_current = (float)x["oven_temp_current"];
-    ESP_LOGD("main", "current oven temp: was %f, now %f", was, g_oven_temp_current); 
+    //oven_temp_current_ = (float)x["oven_temp_current"];
+    ESP_LOGD("main", "current oven temp: was %f, now %f", was, oven_temp_current_); 
   }
 
   if (!fromStat && (x.containsKey("fan_speed") && x["fan_speed"].is<float>()))  {
@@ -222,9 +146,9 @@ void process_properties(const JsonObject& x, bool fromStat=false) {
   }
 
   if ( x.containsKey("fan_speed_adjust") && x["fan_speed_adjust"].is<float>()) {
-    float was = g_fan_speed_adjust;
-    g_fan_speed_adjust = (float)x["fan_speed_adjust"];
-    ESP_LOGD("main", "fan_speed_adjust: was %f, now %f", was, g_fan_speed_adjust); 
+    float was = fan_speed_adjust_;
+    fan_speed_adjust_ = (float)x["fan_speed_adjust"];
+    ESP_LOGD("main", "fan_speed_adjust: was %f, now %f", was, fan_speed_adjust_); 
   }
 
   if ( x.containsKey("fan_speed_min") && x["fan_speed_min"].is<float>()) {
@@ -244,7 +168,7 @@ void process_properties(const JsonObject& x, bool fromStat=false) {
   // }
 
   if (!fromStat && (x.containsKey("use_probe") && x["use_probe"].is<bool>()))  {
-    g_use_probe = (bool)x["use_probe"];
+    use_probe_ = (bool)x["use_probe"];
   }
 
   // Immediatly send retained message
@@ -261,42 +185,42 @@ void process_properties(const JsonObject& x, bool fromStat=false) {
 
 }
 
-void set_fan_speed_min(float fan_speed_min) {
-  float was = g_fan_speed_min;
-  g_fan_speed_min = fan_speed_min;
-  ESP_LOGD("main", "fan_speed_min: was %f, now %f", was, g_fan_speed_min); 
+void dApp::set_fan_speed_min(float fan_speed_min) {
+  float was = fan_speed_min_;
+  fan_speed_min_ = fan_speed_min;
+  ESP_LOGD("main", "fan_speed_min: was %f, now %f", was, fan_speed_min_); 
 
-  if (g_fan_speed != 0.0 && g_fan_speed < g_fan_speed_min) {
-    set_fan_speed(g_fan_speed_min);
+  if (fan_speed_ != 0.0 && fan_speed_ < fan_speed_min_) {
+    set_fan_speed(fan_speed_min_);
   }
 }
 
-void set_fan_speed_max(float fan_speed_max) {
-  float was = g_fan_speed_max;
-  g_fan_speed_max = fan_speed_max;
-  ESP_LOGD("main", "fan_speed_max: was %f, now %f", was, g_fan_speed_max); 
+void dApp::set_fan_speed_max(float fan_speed_max) {
+  float was = fan_speed_max_;
+  fan_speed_max_ = fan_speed_max;
+  ESP_LOGD("main", "fan_speed_max: was %f, now %f", was, fan_speed_max_); 
 
-  if (g_fan_speed > g_fan_speed_max) {
-    set_fan_speed(g_fan_speed_max);
+  if (fan_speed_ > fan_speed_max_) {
+    set_fan_speed(fan_speed_max_);
   }
 }
 
-void set_door_open(bool door_open) {
+void dApp::set_door_open(bool door_open) {
 
-    bool was = g_door_open;
-    g_door_open = door_open;
-    ESP_LOGD("main", "door open: was %i, now %i", was, g_door_open); 
+    bool was = door_open_;
+    door_open_ = door_open;
+    ESP_LOGD("main", "door open: was %i, now %i", was, door_open_); 
 
-    if (g_door_open && !was) {
-      g_saved_fan_speed = g_fan_speed;
+    if (door_open_ && !was) {
+      saved_fan_speed_ = fan_speed_;
       set_fan_speed(0.0);
-    } else if (!g_door_open && was && g_saved_fan_speed != fan_speed_invalid) {
-      set_fan_speed(g_saved_fan_speed);
-      g_saved_fan_speed = fan_speed_invalid;
+    } else if (!door_open_ && was && saved_fan_speed_ != fan_speed_invalid) {
+      set_fan_speed(saved_fan_speed_);
+      saved_fan_speed_ = fan_speed_invalid;
     }
 
-    if (was != g_door_open) {
-      if (g_door_open) {
+    if (was != door_open_) {
+      if (door_open_) {
         // Blink led
       } else {
         // Unblink led
@@ -305,7 +229,7 @@ void set_door_open(bool door_open) {
     }
 }
 
-JsonObject& make_json(JsonObject& jo, const char* prop_name=nullptr) {
+JsonObject& dApp::make_json(JsonObject& jo, const char* prop_name/*=nullptr*/) {
 
     //bool all = strcmp(prop_name, "all") == 0);
     //bool all = strcmp(prop_name, "all") == 0);
@@ -316,31 +240,31 @@ JsonObject& make_json(JsonObject& jo, const char* prop_name=nullptr) {
       jo["fw_version"] = FW_VERSION;
     }
     if (prop_name == nullptr || strcmp(prop_name, "oven_temp_target") == 0) {
-      jo["oven_temp_target"] = g_oven_temp_target;
+      jo["oven_temp_target"] = oven_temp_target_;
     }
     if (prop_name == nullptr || strcmp(prop_name, "oven_temp_current") == 0) {
-      jo["oven_temp_current"] = g_oven_temp_current;
+      jo["oven_temp_current"] = oven_temp_current_;
     }
     if (prop_name == nullptr || strcmp(prop_name, "fan_speed") == 0) {
-      jo["fan_speed"] = g_fan_speed;
+      jo["fan_speed"] = fan_speed_;
     }
     if (prop_name == nullptr || strcmp(prop_name, "fan_speed_min") == 0) {
-      jo["fan_speed_min"] = g_fan_speed_min;
+      jo["fan_speed_min"] = fan_speed_min_;
     }
     if (prop_name == nullptr || strcmp(prop_name, "fan_speed_max") == 0) {
-      jo["fan_speed_max"] = g_fan_speed_max;
+      jo["fan_speed_max"] = fan_speed_max_;
     }
     if (prop_name == nullptr || strcmp(prop_name, "fan_speed_adjust") == 0) {
-      jo["fan_speed_adjust"] = g_fan_speed_adjust;
+      jo["fan_speed_adjust"] = fan_speed_adjust_;
     }
     if (prop_name == nullptr || strcmp(prop_name, "door_open") == 0) {
-      jo["door_open"] = g_door_open;
+      jo["door_open"] = door_open_;
     }
     if (prop_name == nullptr || strcmp(prop_name, "unit_of_measurement") == 0) {
-      jo["unit_of_measurement"] = g_xlate->uom_text();
+      jo["unit_of_measurement"] = xlate_->uom_text();
     }
     if (prop_name == nullptr) {
-      jo["use_probe"] = g_use_probe;
+      jo["use_probe"] = use_probe_;
     }
 
     if (prop_name == nullptr || strcmp(prop_name, "probes") == 0) {
@@ -352,14 +276,14 @@ JsonObject& make_json(JsonObject& jo, const char* prop_name=nullptr) {
         // while ((last = getPreviousClosed(last))) {
         //     ja.add(last->toJson());
         // } 
-        for (int i = 0; i < _countof(g_probe_temps); ++i) {
+        for (int i = 0; i < _countof(probe_temps_); ++i) {
           JsonObject& joProbe = global_json_buffer.createObject();
-          joProbe["temp"] = g_probe_temps[i];
-          joProbe["target"] = g_probe_targets[i];
+          joProbe["temp"] = probe_temps_[i];
+          joProbe["target"] = probe_targets_[i];
           ja.add(joProbe);
-            //g_probe_temps[i] = 0.0;
-            // g_probe_targets[i] = 0.0;
-            // g_fan_speeds[i] = -1;
+            //probe_temps_[i] = 0.0;
+            // probe_targets_[i] = 0.0;
+            // fan_speeds_[i] = -1;
             // [ 
             //   {"temp": 44,
             //    "target": 33}
@@ -377,81 +301,81 @@ JsonObject& make_json(JsonObject& jo, const char* prop_name=nullptr) {
   return jo;
 }
 
-void send_properties() {
+void dApp::send_properties() {
 
   ESP_LOGD("main", "sending stat"); 
 
   //JsonObject& jo = make_json();
   // Send retained message
-  //mqtt_client->publish_json(mqttTopicStat, jo, 1, true);
-  mqtt_client->publish_json(mqttTopicStat, [=](JsonObject &root) {
+  //mqtt_client->publish_json(mqttTopicStat_, jo, 1, true);
+  mqtt_client->publish_json(mqttTopicStat_, [=](JsonObject &root) {
     //root = jo;
     make_json(root);
   }, 1, true);
-  // mqtt_client->publish_json(mqttTopicStat, [=](JsonObject &root) {
+  // mqtt_client->publish_json(mqttTopicStat_, [=](JsonObject &root) {
   //   // root["timezone"] = sntp_time->get_timezone();
   //   root["fw_version"] = FW_VERSION;
-  //   root["oven_temp_target"] = g_oven_temp_target;
-  //   root["oven_temp_current"] = g_oven_temp_current;
-  //   root["fan_speed"] = g_fan_speed;
-  //   root["fan_speed_min"] = g_fan_speed_min;
-  //   root["fan_speed_max"] = g_fan_speed_max;
-  //   root["fan_speed_adjust"] = g_fan_speed_adjust;
-  //   root["door_open"] = g_door_open;
-  //   root["unit_of_measurement"] = g_xlate->uom_text();
+  //   root["oven_temp_target"] = oven_temp_target_;
+  //   root["oven_temp_current"] = oven_temp_current_;
+  //   root["fan_speed"] = fan_speed_;
+  //   root["fan_speed_min"] = fan_speed_min_;
+  //   root["fan_speed_max"] = fan_speed_max_;
+  //   root["fan_speed_adjust"] = fan_speed_adjust_;
+  //   root["door_open"] = door_open_;
+  //   root["unit_of_measurement"] = xlate_->uom_text();
   //   // root["enable_probe"] = g_enable_probe;
-  //   root["use_probe"] = g_use_probe;
+  //   root["use_probe"] = use_probe_;
   // }, 1, true);
 
 }
 
-void send_property(const char* prop_name) {
+void dApp::send_property(const char* prop_name) {
 
   ESP_LOGD("main", "sending prop"); 
 
   // Send non-retained message
-  mqtt_client->publish_json(mqttTopicProp, [=](JsonObject &root) {
+  mqtt_client->publish_json(mqttTopicProp_, [=](JsonObject &root) {
     make_json(root, prop_name);
     // // if (strcmp(prop_name, "timezone") == 0) {
     // //   root["timezone"] = sntp_time->get_timezone();
     // // }
     // if (strcmp(prop_name, "oven_temp_target") == 0) {
-    //   root["oven_temp_target"] = g_oven_temp_target;
+    //   root["oven_temp_target"] = oven_temp_target_;
     // }
     // if (strcmp(prop_name, "oven_temp_current") == 0) {
-    //   root["oven_temp_current"] = g_oven_temp_current;
+    //   root["oven_temp_current"] = oven_temp_current_;
     // }
     // if (strcmp(prop_name, "fan_speed") == 0) {
-    //   root["fan_speed"] = g_fan_speed;
+    //   root["fan_speed"] = fan_speed_;
     // }
     // if (strcmp(prop_name, "fan_speed_min") == 0) {
-    //   root["fan_speed_min"] = g_fan_speed_min;
+    //   root["fan_speed_min"] = fan_speed_min_;
     // }
     // if (strcmp(prop_name, "fan_speed_max") == 0) {
-    //   root["fan_speed_max"] = g_fan_speed_max;
+    //   root["fan_speed_max"] = fan_speed_max_;
     // }
     // if (strcmp(prop_name, "fan_speed_adjust") == 0) {
-    //   root["fan_speed_adjust"] = g_fan_speed_adjust;
+    //   root["fan_speed_adjust"] = fan_speed_adjust_;
     // }
     // if (strcmp(prop_name, "door_open") == 0) {
-    //   root["door_open"] = g_door_open;
+    //   root["door_open"] = door_open_;
     // }
     // if (strcmp(prop_name, "unit_of_measurement") == 0) {
-    //   root["unit_of_measurement"] = g_xlate->uom_text();
+    //   root["unit_of_measurement"] = xlate_->uom_text();
     // }
   }, 1, false);
 
 }
 
 //char* fmt_display_line(char* to, float temp, float target, float fan_speed=-1);
-char* fmt_display_line(char* to, int iProbe) {
+char* dApp::fmt_display_line(char* to, int iProbe) {
   const char fmtCurTemp[] =     "P%1i:%4.0f"; 
   const char fmtTargetrTemp[] = "T:%4.0f"; 
   const char fmtFan[] =         "F:%3.0f"; 
 
-  float temp = g_probe_temps[iProbe];
-  float target = g_probe_targets[iProbe];
-  float fan_speed = g_fan_speeds[iProbe];
+  float temp = probe_temps_[iProbe];
+  float target = probe_targets_[iProbe];
+  float fan_speed = fan_speeds_[iProbe];
 
   // protect our buffers
   if (temp > 9999) { temp = 9999; }
@@ -486,7 +410,7 @@ char* fmt_display_line(char* to, int iProbe) {
   return to;
 }
 
-void refresh_display() {
+void dApp::refresh_display() {
     char buf[100];
 
     lcd->set_writer([=](lcd_pcf8574::PCF8574LCDDisplay & it) -> void {
@@ -498,16 +422,16 @@ void refresh_display() {
 // Strategy:
 //
 //  current < target
-//    g_fan_speed += g_fan_speed_adjust
+//    fan_speed_ += fan_speed_adjust_
 
 //  current > target
-//    g_fan_speed = 0.0
+//    fan_speed_ = 0.0
 
-void process_temp_received(int iProbe, float temp, bool external) {
-    if ((!external && g_use_probe && iProbe == 0) || (external && !g_use_probe)) {
+void dApp::process_temp_received(int iProbe, float temp, bool external) {
+    if ((!external && use_probe_ && iProbe == 0) || (external && !use_probe_)) {
       process_oven_temp(temp);
     }  else {
-      g_probe_temps[iProbe] = temp;
+      probe_temps_[iProbe] = temp;
     }
 
     refresh_display();
@@ -516,28 +440,28 @@ void process_temp_received(int iProbe, float temp, bool external) {
 
 
 
-void process_oven_temp(float oven_temp_current) {
+void dApp::process_oven_temp(float oven_temp_current) {
 
-  if (!g_door_open) {
-    ++g_oven_temp_current_count;
+  if (!door_open_) {
+    ++oven_temp_current_count_;
 
-    float was = g_oven_temp_current;
-    g_oven_temp_current = oven_temp_current;
+    float was = oven_temp_current_;
+    oven_temp_current_ = oven_temp_current;
 
-    ESP_LOGD("main", "process_oven_temp: temp_cur was=%f, now=%f, oven_temp_target=%f, fan_speed=%f", was, g_oven_temp_current, g_oven_temp_target, g_fan_speed); 
+    ESP_LOGD("main", "process_oven_temp: temp_cur was=%f, now=%f, oven_temp_target=%f, fan_speed=%f", was, oven_temp_current_, oven_temp_target_, fan_speed_); 
 
-    //if (g_use_probe && was != g_oven_temp_current) {
+    //if (use_probe_ && was != oven_temp_current_) {
       send_property("oven_temp_current");
     //}
-    float fan_speed = g_fan_speed;
-    if (g_oven_temp_current < g_oven_temp_target) {
-      fan_speed = max(min(fan_speed + fanSpeedAdjust(), g_fan_speed_max), g_fan_speed_min);
-    } else if (g_oven_temp_current > g_oven_temp_target) {
+    float fan_speed = fan_speed_;
+    if (oven_temp_current_ < oven_temp_target_) {
+      fan_speed = max(min(fan_speed + fanSpeedAdjust(), fan_speed_max_), fan_speed_min_);
+    } else if (oven_temp_current_ > oven_temp_target_) {
       fan_speed = fan_speed_off;
     }
 
 
-    if (fan_speed != g_fan_speed) {
+    if (fan_speed != fan_speed_) {
       set_fan_speed(fan_speed);
     } else {
       ESP_LOGD("main", "fan speed unchanged"); 
@@ -549,50 +473,48 @@ void process_oven_temp(float oven_temp_current) {
       ESP_LOGD("main", "process_oven_temp(%f) ignored because \"door open\"", oven_temp_current); 
   }
 
-  g_probe_temps[0] = g_oven_temp_current;
-  g_probe_targets[0] = g_oven_temp_target;
-  g_fan_speeds[0] = g_fan_speed;
+  probe_temps_[0] = oven_temp_current_;
+  probe_targets_[0] = oven_temp_target_;
+  fan_speeds_[0] = fan_speed_;
 
 }
 
-void set_fan_speed(float fan_speed) {
+void dApp::set_fan_speed(float fan_speed) {
 
-  float was = g_fan_speed;
+  float was = fan_speed_;
   speed_pin->set_level(fan_speed);
-  g_fan_speed = fan_speed;
+  fan_speed_ = fan_speed;
 
-  ESP_LOGD("main", "set_fan_speed: was %f, now %f", was, g_fan_speed); 
+  ESP_LOGD("main", "set_fan_speed: was %f, now %f", was, fan_speed_); 
 
-  if (was != g_fan_speed) {
+  if (was != fan_speed_) {
     send_property("fan_speed");
   }
-
-
 }
 
-void process_stat(const JsonObject& x) {
+void dApp::process_stat(const JsonObject& x) {
   const char* job;
-  if (g_haveRetainedProperties) {
+  if (haveRetainedProperties_) {
     job = "ignored";
   } else {
     job = "processed";
   }
   ESP_LOGD("main", "/stat received -- %s", job);
 
-  if (!g_haveRetainedProperties) {
-    g_haveRetainedProperties = true;
+  if (!haveRetainedProperties_) {
+    haveRetainedProperties_ = true;
     process_properties(x, true);
   }
   
  
 }
 
-float adjust_raw_temp(float temp) {
+float dApp::adjust_raw_temp(float temp) {
   return temp * (9.0/5.0) + 32.0;
 }
 
-void reset() {
+void dApp::reset() {
   set_fan_speed(0.0);
-  g_oven_temp_current_count = 0;
-  g_saved_fan_speed = fan_speed_invalid;
+  oven_temp_current_count_ = 0;
+  saved_fan_speed_ = fan_speed_invalid;
 }
