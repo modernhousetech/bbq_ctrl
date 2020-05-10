@@ -4,8 +4,8 @@ esphome:
   platform: ${platform}
   board: ${board}
   includes: 
-    - "custom.h"
-    - "custom.cpp"
+    - "dapp.h"
+    - "dapp.cpp"
 
   on_boot:
     then:
