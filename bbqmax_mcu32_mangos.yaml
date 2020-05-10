@@ -1,6 +1,7 @@
 substitutions:
   # Must also define in custom.cpp
   app: bbqmax
+  App: BBQ Max
   location: "mangos"
   Location: "Mangos"
   platform: ESP32

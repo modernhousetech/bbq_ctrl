@@ -31,16 +31,30 @@ class CelsiusTranslationUnit: public TranslationUnit {
 };
 
 
+// The main device app object definition
 class dApp {
+
+    class Probe {
+      public:
+      float temperature = 0.0;
+      float target = 0.0;
+      float fan_speed = -1;
+      
+      JsonObject& toJson() const;
+    };
     
+    // app_ is either "bbqmini" or "bbqmax". It is passed to us in on_boot()
     std::string app_;
 
+    // We want to remove the variables below as they are now
+    // duplicated in probes_
     float oven_temp_target_ = 0.0;
     float oven_temp_current_ = 0.0;
 
-    float probe_temps_[4];
-    float probe_targets_[4];
-    float fan_speeds_[4];
+    Probe probes_[4];
+
+    // bbqmini has 1 probe, bbqmax has 4 probes
+    int probes_count_ = 0;
 
     // How many oven_temp_current calls have we received. We really only
     // care about 0 and >0. If > 0 then on a set oven_temp_target we will
@@ -90,9 +104,10 @@ class dApp {
     //std::string mqttSensorWfOverlimitStatus_ = "/sensor/wf/over_limit/status";
 
 public:
+    dApp();
 
     void on_boot(const char*);
-    void process_properties(const JsonObject& x, bool fromStat=false);
+    void process_properties(const JsonObject& jo, bool fromStat=false);
     void set_fan_speed(float fan_speed);
     void process_temp_received(int probeId, float temp, bool external);
     void process_oven_temp(float cur_temp);

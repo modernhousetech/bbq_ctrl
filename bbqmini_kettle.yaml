@@ -1,6 +1,7 @@
 substitutions:
   # Must also define in custom.cpp
   app: bbqmini
+  App: BBQ Mini
   location: "kettle"
   Location: "Kettle"
   platform: ESP8266

@@ -187,4 +187,4 @@ display:
     dimensions: 20x${lcd_rows}
     address: 0x27
     lambda: |-
-      it.print("P1:");
+      it.print("${App} - ${Location}");
