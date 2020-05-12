@@ -6,6 +6,8 @@ esphome:
   includes: 
     - "dapp.h"
     - "dapp.cpp"
+    - "temperature_sensor.h"
+    - "temperature_sensor.cpp"
 
   on_boot:
     then:
@@ -19,7 +21,7 @@ esphome:
       #     level: 1.0
       # - output.turn_on: pwr_led
       - lambda: |-
-          dapp.on_boot("${app}");
+          dapp.on_boot("${app}", "${pinProbe1}", "${pinProbe2}");
 
 # Enable logging
 logger:

@@ -20,6 +20,7 @@ extern gpio::GPIOBinaryOutput *counter_clockwise_pin;
 // DelayAction<std::string> *delayaction;
 //extern esp8266_pwm::ESP8266PWM *pwr_led;
 extern lcd_pcf8574::PCF8574LCDDisplay *lcd;
+extern spi::SPIComponent *spi_spicomponent;
 
 // Our single app
 dApp dapp;
@@ -31,18 +32,67 @@ void dApp::makeMqttTopics(const std::string& prefix) {
 
   mqttTopicStat_ = prefix + mqttTopicStat_;
   mqttTopicProp_ = prefix + mqttTopicProp_;
+
+
+
+  
   //mqttSensorWfOverlimitStatus = prefix + mqttSensorWfOverlimitStatus;
 
 }
 
+
 dApp::dApp() {
+
+
+
 
   // Probe 0 is special -- it controls the fan
   probes_[0].fan_speed = 0;
 
 }
+  // temp_sersors_[0] = new TemperatureSensor();
+  // temp_sersors_[0]->set_update_interval(15000);
+  // App.register_component(temp_sersors_[0]);
+  // temp_sersors_[0]->set_spi_parent(spi_spicomponent);
 
-void dApp::on_boot(const char* app) {
+  // temp_sersors_[0]->set_cs_pin(new GPIOPin(33, OUTPUT, false));
+  // App.register_sensor(temp_sersors_[0]);
+  // temp_sersors_[0]->set_name("probe_2");
+  // temp_sersors_[0]->set_unit_of_measurement("\302\260F");
+  // temp_sersors_[0]->set_icon("mdi:thermometer");
+  // temp_sersors_[0]->set_accuracy_decimals(1);
+  // temp_sersors_[0]->set_force_update(false);
+  // sensor::LambdaFilter *sensor_lambdafilter_msen;
+
+  //   sensor_lambdafilter_msen = new sensor::LambdaFilter([=](float x) -> optional<float> {
+  //     return dapp.adjust_raw_temp((float)x);
+  // });
+  // temp_sersors_[0]->set_filters({sensor_lambdafilter_msen});
+
+  // sensor_sensorstatetrigger_msen = new sensor::SensorStateTrigger(temp_sersors_[0]);
+  // automation_msen = new Automation<float>(sensor_sensorstatetrigger_msen);
+
+  // lambdaaction_msen = new LambdaAction<float>([=](float x) -> void {
+  //     dapp.process_temp_received(1, (float)x, false);
+  // });
+
+
+
+  // automation_msen->add_actions({lambdaaction_msen});
+
+
+/*static */void dApp::on_probe_validity_change(int id, bool is_valid) {
+  if (!is_valid)  {
+    dapp.on_probe_validity_change_(id, is_valid);
+  }
+}
+
+void dApp::on_probe_validity_change_(int id, bool is_valid) {
+  refresh_display();
+}
+
+
+void dApp::on_boot(const char* app, const char* pinProbe0, const char* pinProbe1) {
 
   //SetStatusLED(1.0, 1.0, 1.0);
   ESP_LOGD("main", "on_boot {"); 
@@ -50,7 +100,7 @@ void dApp::on_boot(const char* app) {
   app_ = app;
 
   if (app_ == "bbqmax") {
-    probes_count_ = 4;
+    probes_count_ = 2;
   } else {
     // bbqmini
     probes_count_ = 1;
@@ -59,6 +109,39 @@ void dApp::on_boot(const char* app) {
   makeMqttTopics(mqtt_client->get_topic_prefix());
 
   //refresh_display();
+
+  std::string probeName = "probe_";
+  for (int i = 1; i < probes_count_; ++i) {
+    sensor::SensorStateTrigger *sensor_sensorstatetrigger_msen;
+    Automation<float> *automation_msen;
+    LambdaAction<float> *lambdaaction_msen;
+
+      temp_sersors_[i] = new TemperatureSensor();
+      temp_sersors_[i]->init(probeName + to_string(i + 1), i, 33,
+        on_probe_validity_change);
+
+      temp_sersors_[i]->set_spi_parent(spi_spicomponent);
+
+      sensor::LambdaFilter *sensor_lambdafilter_msen;
+
+        sensor_lambdafilter_msen = new sensor::LambdaFilter([=](float x) -> optional<float> {
+          return adjust_raw_temp((float)x);
+      });
+      temp_sersors_[i]->set_filters({sensor_lambdafilter_msen});
+
+      sensor_sensorstatetrigger_msen = new sensor::SensorStateTrigger(temp_sersors_[i]);
+      automation_msen = new Automation<float>(sensor_sensorstatetrigger_msen);
+
+      lambdaaction_msen = new LambdaAction<float>([=](float x) -> void {
+          process_temp_received(i, (float)x, false);
+      });
+
+
+
+      automation_msen->add_actions({lambdaaction_msen});
+
+  }
+
 
   ESP_LOGD("main", "} on_boot"); 
 }
@@ -336,7 +419,11 @@ void dApp::refresh_display() {
 
     lcd->set_writer([=](lcd_pcf8574::PCF8574LCDDisplay & it) -> void {
         it.print(0, 0, fmt_display_line((char*)buf, 0));
-        it.print(0, 1, fmt_display_line((char*)buf, 1));
+        for (int i = 1; i < probes_count_; ++i) {
+          if (temp_sersors_[i]->is_valid()) {
+            it.print(0, i, fmt_display_line((char*)buf, i));
+          }
+        }
     });
 
 }

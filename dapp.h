@@ -1,4 +1,6 @@
 #include "esphome.h"
+#include "temperature_sensor.h"
+using namespace esphome;
 
 
 #define _countof(arr) sizeof(arr) / sizeof(arr[0])
@@ -33,6 +35,8 @@ class CelsiusTranslationUnit: public TranslationUnit {
 
 // The main device app object definition
 class dApp {
+
+    TemperatureSensor* temp_sersors_[4];
 
     class Probe {
       public:
@@ -106,7 +110,7 @@ class dApp {
 public:
     dApp();
 
-    void on_boot(const char*);
+    void on_boot(const char*, const char*, const char*);
     void process_properties(const JsonObject& jo, bool fromStat=false);
     void set_fan_speed(float fan_speed);
     void process_temp_received(int probeId, float temp, bool external);
@@ -115,6 +119,8 @@ public:
     float adjust_raw_temp(float temp);
     void send_properties();
     void reset();
+
+    static void on_probe_validity_change(int id, bool is_valid);
 
 protected:
     void makeMqttTopics(const std::string& prefix);
@@ -125,6 +131,7 @@ protected:
     char* fmt_display_line(char* to, int iProbe);
     void refresh_display();
     void set_fan_speed_max(float fan_speed_max);
+    void on_probe_validity_change_(int id, bool is_valid);
 };
 
 extern dApp dapp;
