@@ -50,6 +50,9 @@ class dApp {
     // app_ is either "bbqmini" or "bbqmax". It is passed to us in on_boot()
     std::string app_;
 
+    int lcd_cols_ = 0;
+    int lcd_rows_ = 0;
+
     // We want to remove the variables below as they are now
     // duplicated in probes_
     float oven_temp_target_ = 0.0;
@@ -110,7 +113,7 @@ class dApp {
 public:
     dApp();
 
-    void on_boot(const char*, const char*, const char*);
+    void on_boot(const char* app, int lcd_cols, int lcd_rows, const char* pinProbe0, const char* pinProbe1);
     void process_properties(const JsonObject& jo, bool fromStat=false);
     void set_fan_speed(float fan_speed);
     void process_temp_received(int probeId, float temp, bool external);
@@ -128,6 +131,13 @@ protected:
     void set_door_open(bool door_open);
     JsonObject& make_json(JsonObject& jo, const char* prop_name=nullptr);
     void send_property(const char* prop_name);
+    void get_display_values(
+      int iProbe, 
+      float& temperature,
+      float& target,
+      float& fan_speed
+      );
+    void fmt_display_mini(char* line0, char*line1);
     char* fmt_display_line(char* to, int iProbe);
     void refresh_display();
     void set_fan_speed_max(float fan_speed_max);

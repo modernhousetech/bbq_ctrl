@@ -1,0 +1,13 @@
+
+  pinMotorClockwise: GPIO5
+  pinMotorCounterClockwise: GPIO0
+  pinMotorSpped: GPIO4
+
+  pinSpiMiso: GPIO12
+  pinSpiClk: GPIO14
+
+  pinI2cSda: GPIO1
+  pinI2cScl: GPIO3
+
+  pinProbe1: GPIO15
+  pinProbe2: GPIO33

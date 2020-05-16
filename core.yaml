@@ -21,7 +21,7 @@ esphome:
       #     level: 1.0
       # - output.turn_on: pwr_led
       - lambda: |-
-          dapp.on_boot("${app}", "${pinProbe1}", "${pinProbe2}");
+          dapp.on_boot("${app}", ${lcd_cols}, ${lcd_rows}, "${pinProbe1}", "${pinProbe2}");
 
 # Enable logging
 logger:
@@ -186,7 +186,7 @@ i2c:
 display:
   - platform: lcd_pcf8574
     id: lcd
-    dimensions: 20x${lcd_rows}
+    dimensions: ${lcd_cols}x${lcd_rows}
     address: 0x27
     lambda: |-
       it.print("${App} - ${Location}");

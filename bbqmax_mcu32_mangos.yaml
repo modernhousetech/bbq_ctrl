@@ -7,6 +7,7 @@ substitutions:
   platform: ESP32
   board: nodemcu-32s
   motorPlatform: ledc
+  lcd_cols: "20"
   lcd_rows: "4"
   <<: !include pin_defs.yaml
 

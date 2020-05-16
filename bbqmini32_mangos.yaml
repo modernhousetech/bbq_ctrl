@@ -2,17 +2,16 @@ substitutions:
   # Must also define in custom.cpp
   app: bbqmini
   App: BBQ Mini
-  location: "kettle"
-  Location: "Kettle"
-  platform: ESP8266
-  board: d1_mini
-  motorPlatform: esp8266_pwm
+  location: "mangos"
+  Location: "Mangos"
+  platform: ESP32
+  board: nodemcu-32s
+  motorPlatform: ledc
   lcd_cols: "16"
   lcd_rows: "2"
-  <<: !include pin_defs_esp8266.yaml
+  <<: !include pin_defs.yaml
 
-  # uncomment if using wifi_static_ip.yaml
-  # ip_address: 192.168.2.30
+  # <<: !include pin_defs_d1_mini.yaml
 
 # first time: comment out ip_address and use include wifi_static_ip
 <<: !include wifi.yaml

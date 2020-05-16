@@ -92,12 +92,15 @@ void dApp::on_probe_validity_change_(int id, bool is_valid) {
 }
 
 
-void dApp::on_boot(const char* app, const char* pinProbe0, const char* pinProbe1) {
+void dApp::on_boot(const char* app, int lcd_cols, int lcd_rows, const char* pinProbe0, const char* pinProbe1) {
 
   //SetStatusLED(1.0, 1.0, 1.0);
   ESP_LOGD("main", "on_boot {"); 
 
   app_ = app;
+
+  lcd_cols_ = lcd_cols;
+  lcd_rows_ = lcd_rows;
 
   if (app_ == "bbqmax") {
     probes_count_ = 2;
@@ -371,15 +374,15 @@ void dApp::send_property(const char* prop_name) {
 
 }
 
-//char* fmt_display_line(char* to, float temp, float target, float fan_speed=-1);
-char* dApp::fmt_display_line(char* to, int iProbe) {
-  const char fmtCurTemp[] =     "P%1i:%4.0f"; 
-  const char fmtTargetrTemp[] = "T:%4.0f"; 
-  const char fmtFan[] =         "F:%3.0f"; 
-
-  float temperature = probes_[iProbe].temperature;
-  float target = probes_[iProbe].target;
-  float fan_speed = probes_[iProbe].fan_speed;
+void dApp::get_display_values(
+  int iProbe, 
+  float& temperature,
+  float& target,
+  float& fan_speed
+  ) {
+  temperature = probes_[iProbe].temperature;
+  target = probes_[iProbe].target;
+  fan_speed = probes_[iProbe].fan_speed;
 
   // protect our buffers
   if (temperature > 9999) { temperature = 9999; }
@@ -387,10 +390,73 @@ char* dApp::fmt_display_line(char* to, int iProbe) {
   if (target > 9999) { target = 9999; }
   if (target < -999) { target = -999; }
 
+  if (fan_speed >= 0) {
+    fan_speed *= 1000;
+    if (fan_speed > 1000) { 
+      fan_speed = 1000; 
+    }
+  } else {
+    fan_speed = 0;
+  }
+
+}
+
+//char* fmt_display_line(char* to, float temp, float target, float fan_speed=-1);
+void dApp::fmt_display_mini(char* line0, char*line1) {
+  // Oven:0000 T:0000
+  // Fan: 000
+  const char fmtCurTemp[] =     "Oven:%4.0f"; 
+  const char fmtTargetrTemp[] = "T:%4.0f"; 
+  const char fmtFan[] =         "Fan: %3.0f"; 
+
+  float temperature;
+  float target;
+  float fan_speed;
+
+  get_display_values(0, temperature, target, fan_speed);
+
+  static char spaces[] = "                              ";
+  strcpy(line0, spaces);
+  strcpy(line1, spaces);
+
+  int len;
+
+  // P1:1234 T:1234 F:100
+  len = sprintf(line0, fmtCurTemp, temperature);
+  line0[len] = ' ';
+  sprintf(line0 + 10, fmtTargetrTemp, target);
+
+  if (fan_speed == 0) {
+    strcpy(line1, "Fan: OFF");
+  } else if (fan_speed >= 1000) {
+    strcpy(line1, "Fan: MAX");
+  } else {
+    sprintf(line1, fmtFan, fan_speed);
+  }
+  
+
+}
+
+//char* fmt_display_line(char* to, float temp, float target, float fan_speed=-1);
+char* dApp::fmt_display_line(char* to, int iProbe) {
+  // 01234567890123456789
+  // P1:0000 T:0000 F:000
+
+  // Oven:0000 T:0000
+  // Fan: 000
+  const char fmtCurTemp[] =     "P%1i:%4.0f"; 
+  const char fmtTargetrTemp[] = "T:%4.0f"; 
+  const char fmtFan[] =         "F:%3.0f"; 
+
+  float temperature;
+  float target;
+  float fan_speed;
+
+  get_display_values(iProbe, temperature, target, fan_speed);
+
   static char spaces[] = "                              ";
   strcpy(to, spaces);
 
-  //char* pstr = to;
   int len;
 
   // P1:1234 T:1234 F:100
@@ -398,33 +464,36 @@ char* dApp::fmt_display_line(char* to, int iProbe) {
   to[len] = ' ';
   len = sprintf(to + 8, fmtTargetrTemp, target);
 
-  if (fan_speed >= 0) {
-    to[len + 8] = ' ';
-    fan_speed *= 1000;
-    if (fan_speed > 1000) { fan_speed = 1000; }
-    if (fan_speed == 0) {
-      strcpy(to + 15, "F:OFF");
-    } else if (fan_speed >= 1000) {
-      strcpy(to + 15, "F:MAX");
-    } else {
-      sprintf(to + 15, fmtFan, fan_speed);
-    }
+  to[len + 8] = ' ';
+  if (fan_speed == 0) {
+    strcpy(to + 15, "F:OFF");
+  } else if (fan_speed >= 1000) {
+    strcpy(to + 15, "F:MAX");
+  } else {
+    sprintf(to + 15, fmtFan, fan_speed);
   }
 
   return to;
 }
 
 void dApp::refresh_display() {
-    char buf[100];
+    char buf1[50];
+    char buf2[50];
 
-    lcd->set_writer([=](lcd_pcf8574::PCF8574LCDDisplay & it) -> void {
-        it.print(0, 0, fmt_display_line((char*)buf, 0));
-        for (int i = 1; i < probes_count_; ++i) {
+  lcd->set_writer([=](lcd_pcf8574::PCF8574LCDDisplay & it) -> void {
+    if (app_ == "bbqmini") {
+        fmt_display_mini((char*)buf1, (char*)buf2);  
+        it.print(0, 0, buf1);
+        it.print(0, 1, buf2);
+    } else {
+        //it.print(0, 0, fmt_display_line((char*)buf1, 0));
+        for (int i = 0; i < probes_count_; ++i) {
           if (temp_sersors_[i]->is_valid()) {
-            it.print(0, i, fmt_display_line((char*)buf, i));
+            it.print(0, i, fmt_display_line((char*)buf1, i));
           }
         }
-    });
+     }
+   });
 
 }
 // Strategy:
