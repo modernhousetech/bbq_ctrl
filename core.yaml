@@ -16,6 +16,7 @@ esphome:
       - output.set_level:
           id: speed_pin
           level: 0.0
+      # - delay: 2s
       # - output.set_level:
       #     id: pwr_led
       #     level: 1.0

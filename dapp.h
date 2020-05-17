@@ -78,6 +78,10 @@ class dApp {
     // bool enable_probe_ = true;
     bool use_probe_ = true;
 
+    // Fan has never been on. As an option we can set the fan initially to top speed to
+    // power it up.
+    bool fan_initialized_ = false;
+
     float fan_speed_min_ = 0.5;
     float fan_speed_max_ = 1.0;
     const float fan_speed_off = 0.0;
@@ -108,7 +112,9 @@ class dApp {
     // MQTT topics
     std::string mqttTopicStat_ = "/stat";
     std::string mqttTopicProp_ = "/prop";
-    //std::string mqttSensorWfOverlimitStatus_ = "/sensor/wf/over_limit/status";
+
+    DelayAction<> *delayaction_;
+
 
 public:
     dApp();

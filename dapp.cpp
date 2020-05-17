@@ -1,7 +1,7 @@
 #include "esphome.h"
 #include "dapp.h"
 
-#define FW_VERSION "0.06.01"
+#define FW_VERSION "0.06.03"
 
 using namespace esphome;
 //using namespace time;
@@ -32,12 +32,7 @@ void dApp::makeMqttTopics(const std::string& prefix) {
 
   mqttTopicStat_ = prefix + mqttTopicStat_;
   mqttTopicProp_ = prefix + mqttTopicProp_;
-
-
-
   
-  //mqttSensorWfOverlimitStatus = prefix + mqttSensorWfOverlimitStatus;
-
 }
 
 
@@ -50,36 +45,6 @@ dApp::dApp() {
   probes_[0].fan_speed = 0;
 
 }
-  // temp_sersors_[0] = new TemperatureSensor();
-  // temp_sersors_[0]->set_update_interval(15000);
-  // App.register_component(temp_sersors_[0]);
-  // temp_sersors_[0]->set_spi_parent(spi_spicomponent);
-
-  // temp_sersors_[0]->set_cs_pin(new GPIOPin(33, OUTPUT, false));
-  // App.register_sensor(temp_sersors_[0]);
-  // temp_sersors_[0]->set_name("probe_2");
-  // temp_sersors_[0]->set_unit_of_measurement("\302\260F");
-  // temp_sersors_[0]->set_icon("mdi:thermometer");
-  // temp_sersors_[0]->set_accuracy_decimals(1);
-  // temp_sersors_[0]->set_force_update(false);
-  // sensor::LambdaFilter *sensor_lambdafilter_msen;
-
-  //   sensor_lambdafilter_msen = new sensor::LambdaFilter([=](float x) -> optional<float> {
-  //     return dapp.adjust_raw_temp((float)x);
-  // });
-  // temp_sersors_[0]->set_filters({sensor_lambdafilter_msen});
-
-  // sensor_sensorstatetrigger_msen = new sensor::SensorStateTrigger(temp_sersors_[0]);
-  // automation_msen = new Automation<float>(sensor_sensorstatetrigger_msen);
-
-  // lambdaaction_msen = new LambdaAction<float>([=](float x) -> void {
-  //     dapp.process_temp_received(1, (float)x, false);
-  // });
-
-
-
-  // automation_msen->add_actions({lambdaaction_msen});
-
 
 /*static */void dApp::on_probe_validity_change(int id, bool is_valid) {
   if (!is_valid)  {
@@ -98,6 +63,7 @@ void dApp::on_boot(const char* app, int lcd_cols, int lcd_rows, const char* pinP
   ESP_LOGD("main", "on_boot {"); 
 
   app_ = app;
+  app_ = "bbqmini";
 
   lcd_cols_ = lcd_cols;
   lcd_rows_ = lcd_rows;
@@ -110,8 +76,6 @@ void dApp::on_boot(const char* app, int lcd_cols, int lcd_rows, const char* pinP
   }
 
   makeMqttTopics(mqtt_client->get_topic_prefix());
-
-  //refresh_display();
 
   std::string probeName = "probe_";
   for (int i = 1; i < probes_count_; ++i) {
@@ -139,12 +103,11 @@ void dApp::on_boot(const char* app, int lcd_cols, int lcd_rows, const char* pinP
           process_temp_received(i, (float)x, false);
       });
 
-
-
       automation_msen->add_actions({lambdaaction_msen});
 
   }
 
+  App.register_component(delayaction_);
 
   ESP_LOGD("main", "} on_boot"); 
 }
@@ -556,6 +519,16 @@ void dApp::process_oven_temp(float oven_temp_current) {
 }
 
 void dApp::set_fan_speed(float fan_speed) {
+
+
+  // if (fan_speed > 0 && !fan_initialized_) {
+  //   ESP_LOGD("main", "fan_initialized_ delay start"); 
+  //   fan_initialized_ = true;
+  //   speed_pin->set_level(1.0);
+  //   delayaction_->set_delay(2000);
+  //   delayaction_->play_complex();
+  //   ESP_LOGD("main", "fan_initialized_ delay end"); 
+  // }
 
   float was = fan_speed_;
   speed_pin->set_level(fan_speed);
