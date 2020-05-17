@@ -36,16 +36,9 @@ class CelsiusTranslationUnit: public TranslationUnit {
 // The main device app object definition
 class dApp {
 
-    TemperatureSensor* temp_sersors_[4];
-
-    class Probe {
-      public:
-      float temperature = 0.0;
-      float target = 0.0;
-      float fan_speed = -1;
-      
-      JsonObject& toJson() const;
-    };
+    // bbqmini has 1 probe, bbqmax has 4 probes
+    int temperature_sensor_count_ = 0;
+    TemperatureSensor* temperature_sensors_[4];
     
     // app_ is either "bbqmini" or "bbqmax". It is passed to us in on_boot()
     std::string app_;
@@ -53,22 +46,11 @@ class dApp {
     int lcd_cols_ = 0;
     int lcd_rows_ = 0;
 
-    // We want to remove the variables below as they are now
-    // duplicated in probes_
-    float oven_temp_target_ = 0.0;
-    float oven_temp_current_ = 0.0;
-
-    Probe probes_[4];
-
-    // bbqmini has 1 probe, bbqmax has 4 probes
-    int probes_count_ = 0;
-
     // How many oven_temp_current calls have we received. We really only
     // care about 0 and >0. If > 0 then on a set oven_temp_target we will
     // immediatly set fan speed accordingly.
     int oven_temp_current_count_ = 0;
 
-    float fan_speed_ = 0.0;
 
     // Fan speed before door open
     // -1 for no saved fan speed

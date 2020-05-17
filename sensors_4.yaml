@@ -1,26 +1,54 @@
 sensor:
     # Temperature sensor 1
   - platform: max6675
-    name: "probe_1"
-    cs_pin: ${pinProbe1}  # GPIO15  # D8
-    update_interval: 15s
-    filters:
-      - lambda: return dapp.adjust_raw_temp((float)x);
-      # - lambda: return x * (9.0/5.0) + 32.0;
-    unit_of_measurement: "°F"    
-    on_value:
-      lambda: |-
-        dapp.process_temp_received(0, (float)x, false);
+    name: "dummy"
+    cs_pin: 1
+    update_interval: never
+    # filters:
+    #   - lambda: return dapp.adjust_raw_temp((float)x);
+    #   # - lambda: return x * (9.0/5.0) + 32.0;
+    # unit_of_measurement: "°F"    
+    # on_value:
+    #   lambda: |-
+    #     dapp.process_temp_received(0, (float)x, false);
+
+    # Temperature sensor 0 (oven)
+  - platform: custom
+    lambda: |-
+      auto temperature_sensor0 = new TemperatureSensor(${pinProbe1});
+      App.register_component(temperature_sensor0);
+      return {temperature_sensor0};
+
+    sensors:
+      name: "probe_1"
+      id: temperature_sensor0
+      on_value:
+        lambda: |-
+          dapp.process_temp_received(0, (float)x, false);
 
     # Temperature sensor 1
   - platform: custom
     lambda: |-
-      auto my_sensor = new TemperatureSensor("${pinProbe1}");
-      App.register_component(my_sensor);
-      return {my_sensor};
+      auto temperature_sensor1 = new TemperatureSensor(${pinProbe2});
+      App.register_component(temperature_sensor1);
+      return {temperature_sensor1};
 
     sensors:
-      name: "My Custom Sensor"
+      name: "probe_2"
+      id: temperature_sensor1
+      on_value:
+        lambda: |-
+          dapp.process_temp_received(1, (float)x, false);
+
+  # - platform: custom
+  #   lambda: |-
+  #     auto temperature_sensor2 = new TemperatureSensor(${pinProbe3});
+  #     App.register_component(temperature_sensor2);
+  #     return {temperature_sensor2};
+
+  #   sensors:
+  #     name: "probe_3"
+  #     id: temperature_sensor2
 
     # # name: "probe_1"
     # cs_pin: ${pinProbe1}  # GPIO15  # D8
