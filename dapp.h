@@ -36,6 +36,7 @@ class CelsiusTranslationUnit: public TranslationUnit {
 // The main device app object definition
 class dApp {
 
+  bool initialized_ = false;
     // bbqmini has 1 probe, bbqmax has 4 probes
     int temperature_sensor_count_ = 0;
     TemperatureSensor* temperature_sensors_[4];
@@ -94,8 +95,6 @@ class dApp {
     // MQTT topics
     std::string mqttTopicStat_ = "/stat";
     std::string mqttTopicProp_ = "/prop";
-
-    DelayAction<> *delayaction_;
 
 
 public:

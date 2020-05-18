@@ -13,18 +13,20 @@ class TemperatureSensor: public max6675::MAX6675Sensor {
 
   std::function<void(int id, bool isValid)> funct_valid_state_change_;
 
-  static constexpr float invalid_temperature = std::numeric_limits<float>::max();
 
   public:
+  static constexpr float invalid_temperature = std::numeric_limits<float>::max();
   float temperature = invalid_temperature;
   float target = invalid_temperature;
   float fan_speed = -1;
 
   // Now I wish I'd used getter/setters
   void set_temperature(float _temperature) {
-    if (funct_valid_state_change_ != nullptr && _temperature != temperature && 
-     (_temperature == invalid_temperature || 
-      temperature == invalid_temperature)) {
+    float was = temperature;
+    temperature = _temperature;
+    if (funct_valid_state_change_ != nullptr && temperature != was && 
+     (temperature == invalid_temperature || 
+      was == invalid_temperature)) {
         funct_valid_state_change_(id_, is_valid());
     }
   }
