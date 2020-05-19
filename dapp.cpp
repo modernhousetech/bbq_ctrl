@@ -20,14 +20,6 @@ extern mqtt::MQTTClientComponent *mqtt_client;
 extern lcd_pcf8574::PCF8574LCDDisplay *lcd;
 
 
-// These are the sensor objects from esphome. We map these to our
-// array: temperature_sensors_
-extern sensor::Sensor *temperature_sensor0;
-extern sensor::Sensor *temperature_sensor1;
-extern sensor::Sensor *temperature_sensor2;
-extern sensor::Sensor *temperature_sensor4;
-
-
 // Our single app
 dApp dapp;
 
@@ -66,17 +58,9 @@ void dApp::on_boot(const char* app, int lcd_cols, int lcd_rows, const char* pinP
   lcd_cols_ = lcd_cols;
   lcd_rows_ = lcd_rows;
 
-  temperature_sensors_[0] = (TemperatureSensor*)temperature_sensor0;
+  //temperature_sensors_[0] = temperature_sensor0;
   // Probe 0 is special -- it controls the fan
   temperature_sensors_[0]->fan_speed = 0;
-
-  if (app_ == "bbqmax") {
-    temperature_sensor_count_ = 2;
-    temperature_sensors_[1] = (TemperatureSensor*)temperature_sensor1;
-  } else {
-    // bbqmini
-    temperature_sensor_count_ = 1;
-  }
 
   makeMqttTopics(mqtt_client->get_topic_prefix());
 
@@ -121,8 +105,14 @@ void dApp::on_boot(const char* app, int lcd_cols, int lcd_rows, const char* pinP
 
 void dApp::process_properties(const JsonObject& jo, bool fromStat) {
 
+  if (!initialized_) {
+      ESP_LOGD("main", "process_properties not initialized"); 
+      return;
+  }
+
   ESP_LOGD("main", "\n\nBegin: process_properties(arg count=%i)", jo.size()); 
 
+#if 1
   if ( jo.containsKey("unit_of_measurement") && jo["unit_of_measurement"].is<char*>()) {
     const char* was = xlate_->uom_text();
     const char* uom = jo["unit_of_measurement"];
@@ -149,7 +139,8 @@ void dApp::process_properties(const JsonObject& jo, bool fromStat) {
     }
     ESP_LOGD("main", "unit_of_measurement: specified %s, was %s, now %s", uom, was, xlate_->uom_text()); 
   }
-
+#endif
+#if 1
   if (jo.containsKey("oven_temp_target") && jo["oven_temp_target"].is<float>())  {
     float was = temperature_sensors_[0]->target;
     temperature_sensors_[0]->target = (float)jo["oven_temp_target"];
@@ -163,7 +154,7 @@ void dApp::process_properties(const JsonObject& jo, bool fromStat) {
       process_oven_temp(temperature_sensors_[0]->temperature);
     }
   }
-
+#endif
   // oven_temp_current is in the retained "stat" messsage but ignored here from "stat" 
   if (!fromStat && (jo.containsKey("oven_temp_current") && jo["oven_temp_current"].is<float>()))  {
     float was = temperature_sensors_[0]->temperature;
@@ -292,6 +283,7 @@ JsonObject& dApp::make_json(JsonObject& jo, const char* prop_name/*=nullptr*/) {
 }
 
 void dApp::send_properties() {
+  //return;
 
   ESP_LOGD("main", "sending stat"); 
 
@@ -446,7 +438,6 @@ char* dApp::fmt_display_line(char* to, int iProbe) {
   // P1:0000 T:0000 F:500
   // P1:0000 T:0000 F:OFF
 
-  try {
   const char fmtCurTempName[] =  "P%1i:";
   const char fmtCurTemp[] =      "%4.0f "; 
   const char fmtTargetrTemp[] = "T:%4.0f "; 
@@ -499,10 +490,6 @@ char* dApp::fmt_display_line(char* to, int iProbe) {
     }
   }
 
-  } catch(...) {
-    ESP_LOGD("main", "\n\nEXCEPTION\n\n"); 
-    strcpy(to, "bad");
-  }
   return to;
 }
 
@@ -615,7 +602,7 @@ void dApp::set_fan_speed(float fan_speed) {
   }
 }
 
-void dApp::process_stat(const JsonObject& x) {
+void dApp::process_stat(const JsonObject& jo) {
   const char* job;
   if (haveRetainedProperties_) {
     job = "ignored";
@@ -626,7 +613,7 @@ void dApp::process_stat(const JsonObject& x) {
 
   if (!haveRetainedProperties_) {
     haveRetainedProperties_ = true;
-    process_properties(x, true);
+    process_properties(jo, true);
   }
   
  

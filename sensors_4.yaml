@@ -1,27 +1,37 @@
 sensor:
-    # Temperature sensor 1
+    # The temperature sensor
+  # - platform: max6675
+  #   name: "probe_x"
+  #   # id: temperature_sensor0
+  #   cs_pin: ${pinProbe1}  # GPIO15  # D8
+  #   update_interval: 15s
+  #   filters:
+  #     - lambda: return dapp.adjust_raw_temp((float)x);
+  #     # - lambda: return x * (9.0/5.0) + 32.0;
+  #   unit_of_measurement: "°F"    
+  #   on_value:
+  #     lambda: |-
+  #       dapp.process_temp_received(0, (float)x, false);
+
+    # Dummy sensor specified only to get the max6675 libraries for esphome
+    # build. TODO: need to find out how to do this normally.
   - platform: max6675
     name: "dummy"
-    cs_pin: 1
+    cs_pin: ${pin_dummy_sensor}
     update_interval: never
-    # filters:
-    #   - lambda: return dapp.adjust_raw_temp((float)x);
-    #   # - lambda: return x * (9.0/5.0) + 32.0;
-    # unit_of_measurement: "°F"    
-    # on_value:
-    #   lambda: |-
-    #     dapp.process_temp_received(0, (float)x, false);
 
     # Temperature sensor 0 (oven)
   - platform: custom
     lambda: |-
-      auto temperature_sensor0 = new TemperatureSensor(${pinProbe1});
-      App.register_component(temperature_sensor0);
-      return {temperature_sensor0};
+      TemperatureSensor* sensor = dapp.add_sensor($pinProbe1);
+      App.register_component(sensor);
+      return {sensor};
 
     sensors:
       name: "probe_1"
-      id: temperature_sensor0
+      filters:
+      - lambda: return dapp.adjust_raw_temp((float)x);
+      unit_of_measurement: "°F"    
       on_value:
         lambda: |-
           dapp.process_temp_received(0, (float)x, false);
@@ -29,57 +39,25 @@ sensor:
     # Temperature sensor 1
   - platform: custom
     lambda: |-
-      auto temperature_sensor1 = new TemperatureSensor(${pinProbe2});
-      App.register_component(temperature_sensor1);
-      return {temperature_sensor1};
+      TemperatureSensor* sensor = dapp.add_sensor($pinProbe2);
+      App.register_component(sensor);
+      return {sensor};
 
     sensors:
       name: "probe_2"
-      id: temperature_sensor1
+      filters:
+      - lambda: return dapp.adjust_raw_temp((float)x);
+      unit_of_measurement: "°F"    
       on_value:
         lambda: |-
           dapp.process_temp_received(1, (float)x, false);
 
-  # - platform: custom
-  #   lambda: |-
-  #     auto temperature_sensor2 = new TemperatureSensor(${pinProbe3});
-  #     App.register_component(temperature_sensor2);
-  #     return {temperature_sensor2};
-
-  #   sensors:
-  #     name: "probe_3"
-  #     id: temperature_sensor2
-
-    # # name: "probe_1"
-    # cs_pin: ${pinProbe1}  # GPIO15  # D8
-    # update_interval: 15s
-    # filters:
-    #   - lambda: return dapp.adjust_raw_temp((float)x);
-    #   # - lambda: return x * (9.0/5.0) + 32.0;
-    # unit_of_measurement: "°F"    
-    # on_value:
-    #   lambda: |-
-    #     dapp.process_temp_received(0, (float)x, false);
-
-
-
-  #   # Temperature sensor 2
-  # - platform: max6675
-  #   name: "probe_2"
-  #   cs_pin: ${pinProbe2}  
-  #   update_interval: 15s
-  #   filters:
-  #     - lambda: return dapp.adjust_raw_temp((float)x);
-  #   unit_of_measurement: "°F"    
-  #   on_value:
-  #     lambda: |-
-  #       dapp.process_temp_received(1, (float)x, false);
-
   # two housekeeping software sensors
   - platform: wifi_signal
     name: "wifi_signal"
-    update_interval: 60s
+    update_interval: 5min
 
   - platform: uptime
     name: uptime
+    update_interval: 5min
 

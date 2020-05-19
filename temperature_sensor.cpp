@@ -31,6 +31,7 @@ void TemperatureSensor::setup() {
   set_icon("mdi:thermometer");
   set_accuracy_decimals(1);
   set_force_update(false);
+  //setup();
 }
 
 

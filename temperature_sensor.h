@@ -2,11 +2,16 @@
 #include "esphome.h"
 using namespace esphome;
 
-using temp_sensor_callback_t = std::function<void(JsonObject &)>;
+//#define EMBED_SENSOR
 
 
-
+#ifdef EMBED_SENSOR
+class TemperatureSensor {
+max6675::MAX6675Sensor *sensor_;
+#else
 class TemperatureSensor: public max6675::MAX6675Sensor {
+#endif
+
   int id_ = 0;
   int pin_;
   //bool is_valid_ = true;

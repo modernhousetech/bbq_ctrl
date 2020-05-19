@@ -1,7 +1,8 @@
 sensor:
     # The temperature sensor
   - platform: max6675
-    name: "probe_1"
+    name: "probe_x"
+    # id: temperature_sensor0
     cs_pin: ${pinProbe1}  # GPIO15  # D8
     update_interval: 15s
     filters:
@@ -12,11 +13,39 @@ sensor:
       lambda: |-
         dapp.process_temp_received(0, (float)x, false);
 
+
+
+# sensor:
+#     # Dummy sensor specified only to get the max6675 libraries for esphome
+#     # build. TODO: need to find out how to do this normally.
+#   - platform: max6675
+#     name: "dummy"
+#     cs_pin: ${pin_dummy_sensor}
+#     update_interval: never
+
+    # Temperature sensor 0 (oven)
+  - platform: custom
+    lambda: |-
+      auto temperature_sensor0 = new TemperatureSensor(${pinProbe2});
+      App.register_component(temperature_sensor0);
+      return {temperature_sensor0};
+
+    sensors:
+      name: "probe_1"
+      filters:
+      - lambda: return dapp.adjust_raw_temp((float)x);
+      unit_of_measurement: "°F"    
+      id: temperature_sensor0
+      on_value:
+        lambda: |-
+          dapp.process_temp_received(0, (float)x, false);
+
   # two housekeeping software sensors
   - platform: wifi_signal
     name: "wifi_signal"
-    update_interval: 60s
+    update_interval: 5min
 
   - platform: uptime
     name: uptime
+    update_interval: 5min
 

@@ -12,3 +12,4 @@
   pinProbe1: "15"
   pinProbe2: "33"
   pinProbe3: "22"
+  pin_dummy_sensor: "16"

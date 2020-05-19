@@ -36,8 +36,9 @@ class CelsiusTranslationUnit: public TranslationUnit {
 // The main device app object definition
 class dApp {
 
-  bool initialized_ = false;
+    bool initialized_ = false;
     // bbqmini has 1 probe, bbqmax has 4 probes
+
     int temperature_sensor_count_ = 0;
     TemperatureSensor* temperature_sensors_[4];
     
@@ -100,12 +101,16 @@ class dApp {
 public:
     dApp();
 
+    TemperatureSensor*add_sensor(int pin) {
+      return temperature_sensors_[temperature_sensor_count_++] = new TemperatureSensor(pin);
+    }
+
     void on_boot(const char* app, int lcd_cols, int lcd_rows, const char* pinProbe0, const char* pinProbe1);
     void process_properties(const JsonObject& jo, bool fromStat=false);
     void set_fan_speed(float fan_speed);
     void process_temp_received(int probeId, float temp, bool external);
     void process_oven_temp(float cur_temp);
-    void process_stat(const JsonObject& x);
+    void process_stat(const JsonObject& jo);
     float adjust_raw_temp(float temp);
     void send_properties();
     void reset();

@@ -9,5 +9,7 @@
   pinI2cSda: GPIO1
   pinI2cScl: GPIO3
 
-  pinProbe1: GPIO15
-  pinProbe2: GPIO33
+  pinProbe1: "15"
+  pinProbe2: "33"
+  pinProbe3: "22"
+  pin_dummy_sensor: "16"
