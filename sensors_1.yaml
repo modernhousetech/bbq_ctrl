@@ -26,16 +26,15 @@ sensor:
     # Temperature sensor 0 (oven)
   - platform: custom
     lambda: |-
-      auto temperature_sensor0 = new TemperatureSensor(${pinProbe2});
-      App.register_component(temperature_sensor0);
-      return {temperature_sensor0};
+      TemperatureSensor* sensor = dapp.add_sensor($pinProbe1);
+      App.register_component(sensor);
+      return {sensor};
 
     sensors:
       name: "probe_1"
       filters:
       - lambda: return dapp.adjust_raw_temp((float)x);
       unit_of_measurement: "°F"    
-      id: temperature_sensor0
       on_value:
         lambda: |-
           dapp.process_temp_received(0, (float)x, false);

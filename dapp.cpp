@@ -24,15 +24,6 @@ extern lcd_pcf8574::PCF8574LCDDisplay *lcd;
 dApp dapp;
 
 
-void dApp::makeMqttTopics(const std::string& prefix) {
-
-  mqtt_topic_prefix_ = prefix;
-
-  mqttTopicStat_ = prefix + mqttTopicStat_;
-  mqttTopicProp_ = prefix + mqttTopicProp_;
-  
-}
-
 
 dApp::dApp() {
 }
@@ -58,24 +49,26 @@ void dApp::on_boot(const char* app, int lcd_cols, int lcd_rows, const char* pinP
   lcd_cols_ = lcd_cols;
   lcd_rows_ = lcd_rows;
 
-  //temperature_sensors_[0] = temperature_sensor0;
-  // Probe 0 is special -- it controls the fan
-  temperature_sensors_[0]->fan_speed = 0;
+  if (temperature_sensor_count_ == 0) {
+    add_sensor(0);
+  }
 
   makeMqttTopics(mqtt_client->get_topic_prefix());
-
-  std::string probeName = "probe_";
-  for (int i = 0; i < temperature_sensor_count_; ++i) {
-
-      temperature_sensors_[i]->set_validity_callback(on_probe_validity_change);
-      temperature_sensors_[i]->set_id(i);
-
-  }
 
   initialized_ = true;
 
   ESP_LOGD("main", "} on_boot"); 
 }
+
+void dApp::makeMqttTopics(const std::string& prefix) {
+
+  mqtt_topic_prefix_ = prefix;
+
+  mqttTopicStat_ = prefix + mqttTopicStat_;
+  mqttTopicProp_ = prefix + mqttTopicProp_;
+  
+}
+
 
 
 // Example /stat json

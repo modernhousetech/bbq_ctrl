@@ -44,9 +44,15 @@ class TemperatureSensor: public max6675::MAX6675Sensor {
   // auto temperaturex() const -> const float& { return temperature_; }
 
 
-  TemperatureSensor(int pin) {
+  TemperatureSensor(int pin, int id, bool hasFan, std::function<void(int id, bool isValid)>f) {
     pin_ = pin;
-  }
+    set_id(id);
+    set_validity_callback(f);
+    if (hasFan) {
+      fan_speed = 0;
+    }
+}
+  
   void update() override;
   void setup() override; 
 

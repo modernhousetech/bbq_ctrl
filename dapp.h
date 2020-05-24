@@ -102,7 +102,10 @@ public:
     dApp();
 
     TemperatureSensor*add_sensor(int pin) {
-      return temperature_sensors_[temperature_sensor_count_++] = new TemperatureSensor(pin);
+      int i = temperature_sensor_count_++;
+      // first probe controls fan "i == 0"
+      return temperature_sensors_[i] = 
+        new TemperatureSensor(pin, i, i == 0, on_probe_validity_change);
     }
 
     void on_boot(const char* app, int lcd_cols, int lcd_rows, const char* pinProbe0, const char* pinProbe1);
